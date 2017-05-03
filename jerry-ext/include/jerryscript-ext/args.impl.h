@@ -36,14 +36,15 @@ JERRYX_ARG_TRANSFORM_FUNC (jerryx_arg_transform_native_pointer_optional);
 JERRYX_ARG_TRANSFORM_FUNC (jerryx_arg_transform_ignore);
 
 /**
- * Create a jerryx_arg_t instance for number argument.
+ * Create a validation/transformation step (`jerryx_arg_t`) that expects to
+ * consume one `number` JS argument and stores it into a C `double`.
  *
  * @return a jerryx_arg_t instance.
  */
 static inline jerryx_arg_t
-jerryx_arg_number (double *dest, /**< points to the native number */
-                   jerryx_arg_coerce_t coerce_flag, /**< whether the type coercion is allowed */
-                   jerryx_arg_optional_t opt_flag) /**< whether it is optional argument */
+jerryx_arg_number (double *dest, /**< pointer to the double where the result should be stored */
+                   jerryx_arg_coerce_t coerce_flag, /**< whether type coercion is allowed */
+                   jerryx_arg_optional_t opt_flag) /**< whether the argument is optional */
 {
   jerryx_arg_transform_func_t func;
 
@@ -78,14 +79,15 @@ jerryx_arg_number (double *dest, /**< points to the native number */
 } /* jerryx_arg_number */
 
 /**
- * Create a jerryx_arg_t instance for boolean argument.
+ * Create a validation/transformation step (`jerryx_arg_t`) that expects to
+ * consume one `boolean` JS argument and stores it into a C `bool`.
  *
  * @return a jerryx_arg_t instance.
  */
 static inline jerryx_arg_t
 jerryx_arg_boolean (bool *dest, /**< points to the native bool */
-                    jerryx_arg_coerce_t coerce_flag, /**< whether the type coercion is allowed */
-                    jerryx_arg_optional_t opt_flag) /**< whether it is optional argument */
+                    jerryx_arg_coerce_t coerce_flag, /**< whether type coercion is allowed */
+                    jerryx_arg_optional_t opt_flag) /**< whether the argument is optional */
 {
   jerryx_arg_transform_func_t func;
 
@@ -120,15 +122,16 @@ jerryx_arg_boolean (bool *dest, /**< points to the native bool */
 } /* jerryx_arg_boolean */
 
 /**
- * Create a jerryx_arg_t instance for string argument.
+ * Create a validation/transformation step (`jerryx_arg_t`) that expects to
+ * consume one `string` JS argument and stores it into a C `char` array.
  *
  * @return a jerryx_arg_t instance.
  */
 static inline jerryx_arg_t
-jerryx_arg_string (char *dest, /**< points to the native char array */
+jerryx_arg_string (char *dest, /**< pointer to the native char array where the result should be stored */
                    uint32_t size, /**< the size of native char array */
-                   jerryx_arg_coerce_t coerce_flag, /**< whether the type coercion is allowed */
-                   jerryx_arg_optional_t opt_flag) /**< whether it is optional argument */
+                   jerryx_arg_coerce_t coerce_flag, /**< whether type coercion is allowed */
+                   jerryx_arg_optional_t opt_flag) /**< whether the argument is optional */
 {
   jerryx_arg_transform_func_t func;
 
@@ -164,13 +167,14 @@ jerryx_arg_string (char *dest, /**< points to the native char array */
 } /* jerryx_arg_string */
 
 /**
- * Create a jerryx_arg_t instance for function argument.
+ * Create a validation/transformation step (`jerryx_arg_t`) that expects to
+ * consume one `function` JS argument and stores it into a C `jerry_value_t`.
  *
  * @return a jerryx_arg_t instance.
  */
 static inline jerryx_arg_t
-jerryx_arg_function (jerry_value_t *dest, /**< points to the js function value */
-                     jerryx_arg_optional_t opt_flag) /**< whether it is optional argument */
+jerryx_arg_function (jerry_value_t *dest, /**< pointer to the jerry_value_t where the result should be stored */
+                     jerryx_arg_optional_t opt_flag) /**< whether the argument is optional */
 {
   jerryx_arg_transform_func_t func;
 
@@ -191,14 +195,17 @@ jerryx_arg_function (jerry_value_t *dest, /**< points to the js function value *
 } /* jerryx_arg_function */
 
 /**
- * Create a jerryx_arg_t instance for native pointer argument.
+ * Create a validation/transformation step (`jerryx_arg_t`) that expects to
+ * consume one `Object` JS argument that is 'backed' with a native pointer with
+ * a given type info. In case the native pointer info matches, the transform
+ * will succeed and the object's native pointer will be assigned to *dest.
  *
  * @return a jerryx_arg_t instance.
  */
 static inline jerryx_arg_t
-jerryx_arg_native_pointer (void **dest, /**< points to the native pointer */
+jerryx_arg_native_pointer (void **dest, /**< pointer to where the resulting native pointer should be stored */
                            const jerry_object_native_info_t *info_p, /**< expected the type info */
-                           jerryx_arg_optional_t opt_flag) /**< whether it is optional argument */
+                           jerryx_arg_optional_t opt_flag) /**< whether the argument is optional */
 {
   jerryx_arg_transform_func_t func;
 
@@ -239,8 +246,8 @@ jerryx_arg_ignore (void)
  * @return a jerryx_arg_t instance.
  */
 static inline jerryx_arg_t
-jerryx_arg_custom (void *dest, /**< points to the native argument */
-                   uintptr_t extra_info, /**< the extra infomation of the jerryx_arg_t */
+jerryx_arg_custom (void *dest, /**< pointer to the native argument where the result should be stored */
+                   uintptr_t extra_info, /**< the extra parameter, specific to the transform function */
                    jerryx_arg_transform_func_t func) /**< the custom transform function */
 {
   return (jerryx_arg_t)

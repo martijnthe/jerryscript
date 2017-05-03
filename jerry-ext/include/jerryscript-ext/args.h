@@ -58,14 +58,13 @@ jerry_value_t NAME (jerryx_arg_js_iterator_t *js_arg_iter_p, \
 
 
 /**
- * The structure of the jerry argument in arg transform.
- * Each native argument should have one corresponding jerryx_arg_t item.
+ * The structure defining a single validation & transformation step.
  */
 struct jerryx_arg_t
 {
-  jerryx_arg_transform_func_t func; /**< the transform function for the native argument */
-  void *dest; /**< point to the native argument */
-  uintptr_t extra_info; /**< extra infomation for arg transform */
+  jerryx_arg_transform_func_t func; /**< the transform function */
+  void *dest; /**< pointer to destination where func should store the result */
+  uintptr_t extra_info; /**< extra information, specific to func */
 };
 
 jerry_value_t jerryx_arg_transform_args_with_this (const jerry_value_t this_val,
@@ -80,7 +79,7 @@ jerry_value_t jerryx_arg_transform_args (const jerry_value_t *js_arg_p,
                                          jerry_length_t c_arg_cnt);
 
 /**
- * Indicates whether an argument can be coerced into the target type.
+ * Indicates whether an argument is allowed to be coerced into the expected JS type.
  */
 typedef enum
 {
@@ -93,8 +92,16 @@ typedef enum
  */
 typedef enum
 {
-  JERRYX_ARG_OPTIONAL, /**< the argument is optional */
-  JERRYX_ARG_REQUIRED /**< the argument is required. */
+  /**
+   * The argument is optional. If the argument is `undefined` the transform is
+   * successful and `c_arg_p->dest` remains untouched.
+   */
+  JERRYX_ARG_OPTIONAL,
+  /**
+   * The argument is required. If the argument is `undefined` the transform
+   * will fail and `c_arg_p->dest` remains untouched.
+   */
+  JERRYX_ARG_REQUIRED
 } jerryx_arg_optional_t;
 
 /* Inline functions for initializing jerryx_arg_t */

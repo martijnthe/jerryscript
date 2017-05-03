@@ -20,14 +20,14 @@
 /**
  * Validate the JS arguments and assign them to the native arguments.
  *
- * @return jerry undefined: the validator passes,
- *         jerry error: the validator fails.
+ * @return jerry undefined: all validators passed,
+ *         jerry error: a validator failed.
  */
 jerry_value_t
-jerryx_arg_transform_args (const jerry_value_t *js_arg_p, /**< points to the js argument */
-                           const jerry_length_t js_arg_cnt, /**< the count of the js arguments */
-                           const jerryx_arg_t *c_arg_p, /**< points to the jerryx_arg_t */
-                           jerry_length_t c_arg_cnt) /**< the count of the native argument */
+jerryx_arg_transform_args (const jerry_value_t *js_arg_p, /**< points to the array with JS arguments */
+                           const jerry_length_t js_arg_cnt, /**< the count of the `js_arg_p` array */
+                           const jerryx_arg_t *c_arg_p, /**< points to the array of validation/transformation steps */
+                           jerry_length_t c_arg_cnt) /**< the count of the `c_arg_p` array */
 {
   jerry_value_t ret = jerry_create_undefined ();
 
@@ -49,16 +49,19 @@ jerryx_arg_transform_args (const jerry_value_t *js_arg_p, /**< points to the js 
 /**
  * Validate the this value and the JS arguments,
  * and assign them to the native arguments.
+ * This function is useful to perform input validation inside external
+ * function handlers (see jerry_external_handler_t).
+ * @note this_val is processed as the first value, before the array of arguments.
  *
- * @return jerry undefined: the validator passes,
- *         jerry error: the validator fails.
+ * @return jerry undefined: all validators passed,
+ *         jerry error: a validator failed.
  */
 jerry_value_t
 jerryx_arg_transform_args_with_this (const jerry_value_t this_val, /**< the this_val for the external function */
-                                     const jerry_value_t *js_arg_p, /**< points to the js argument */
-                                     const jerry_length_t js_arg_cnt, /**< the count of the js arguments */
-                                     const jerryx_arg_t *c_arg_p, /**< points to the jerryx_arg_t */
-                                     jerry_length_t c_arg_cnt) /**< the count of the native argument */
+                                     const jerry_value_t *js_arg_p, /**< points to the array with JS arguments */
+                                     const jerry_length_t js_arg_cnt, /**< the count of the `js_arg_p` array */
+                                     const jerryx_arg_t *c_arg_p, /**< points to the array of validation/transformation steps */
+                                     jerry_length_t c_arg_cnt) /**< the count of the `c_arg_p` array */
 {
   if (c_arg_cnt == 0)
   {
