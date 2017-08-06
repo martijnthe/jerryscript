@@ -270,7 +270,8 @@ endif()
 
 # Unittests
 if(UNITTESTS)
-  add_subdirectory(tests/unit-core)
+#  add_subdirectory(tests/unit-core)
+  add_subdirectory(tests/klee)
   if(JERRY_LIBM)
     add_subdirectory(tests/unit-libm)
   endif()
