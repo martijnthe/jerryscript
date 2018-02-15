@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { DEFAULT_HOST, getOptionsFromArgs } from '../cli';
+import { getOptionsFromArgs } from '../cli';
+import { DEFAULT_SERVER_HOST } from '../../lib/cdt-proxy';
 
 describe('getOptionsFromArgs', () => {
 
   it('parses --inspect-brk with port only', () => {
     const opt = getOptionsFromArgs(['--inspect-brk=1234']);
-    expect(opt.host).toEqual(DEFAULT_HOST);
+    expect(opt.host).toEqual(DEFAULT_SERVER_HOST);
     expect(opt.port).toEqual(1234);
   });
 
