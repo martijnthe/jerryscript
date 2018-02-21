@@ -48,7 +48,7 @@ export function onHttpRequest(this: ChromeDevToolsProxyServer,
       // FIXME: linux-specific now: this should be a file:// URL to the jsfile
       const fileUrl = 'file://' + path.resolve(this.jsfile);
       result = [{
-        'description': 'zephyr.js instance',
+        'description': 'JerryScript debugger',
         'devtoolsFrontendUrl': `https://chrome-devtools-frontend.appspot.com/serve_file/' +
           '@60cd6e859b9f557d2312f5bf532f6aec5f284980/inspector.html?experiments=true&v8only=true&ws=${urlFrag}`,
         'id': this.uuid,
