@@ -37,6 +37,8 @@ export class ChromeDevToolsProxyServer {
   readonly port: number;
   readonly uuid: string;
   readonly jsfile: string;
+  asyncCallStackDepth: number;
+  pauseOnExceptions: string;
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
     const server = http.createServer();
@@ -46,6 +48,8 @@ export class ChromeDevToolsProxyServer {
     this.uuid = options.uuid || uuid();
     // FIXME: probably not quite right, can include ../.. etc.
     this.jsfile = options.jsfile || 'untitled.js';
+    this.asyncCallStackDepth = 0;  // 0 is unlimited
+    this.pauseOnExceptions = 'none';
 
     server.listen(this.port);
 
@@ -56,11 +60,6 @@ export class ChromeDevToolsProxyServer {
     wss.on('connection', function connection(ws, req) {
       const ip = req.connection.remoteAddress;
       console.log(`connection from: ${ip}`);
-
-      ws.on('message', function incoming(message) {
-        console.log('received: %s', message);
-      });
-      ws.send('hello');
     });
 
     server.on('request', onHttpRequest.bind(this));
@@ -70,14 +69,28 @@ export class ChromeDevToolsProxyServer {
       logConsole: true,
     });
 
-    // Lifted from the example on https://github.com/nojvek/noice-json-rpc
-    const enable = async () => {
-      console.log('enable called!');
+    // Based on the example from https://github.com/nojvek/noice-json-rpc
+    const notImplemented = async () => {
+      console.log('Function not implemented');
     };
 
-    api.Debugger.expose({ enable });
+    // QUESTION: is there a better way to do this?
+    const proxy = this;
+
+    api.Debugger.expose({
+      enable: notImplemented,
+      setBlackboxPatterns: notImplemented,
+      async setAsyncCallStackDepth(params) {
+        proxy.asyncCallStackDepth = params.maxDepth;
+      },
+      async setPauseOnExceptions(params) {
+        proxy.pauseOnExceptions = params.state;
+      },
+    });
+    api.Profiler.expose({ enable: notImplemented });
     api.Runtime.expose({
-      enable,
+      enable: notImplemented,
+      runIfWaitingForDebugger: notImplemented,
       async runScript() {
         console.log('runScript called!');
         return {
