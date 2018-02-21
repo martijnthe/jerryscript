@@ -15,21 +15,28 @@
 import { ChromeDevToolsProxyServer, JERRY_DEBUGGER_VERSION, DEVTOOLS_PROTOCOL_VERSION } from './cdt-proxy';
 import * as http from 'http';
 import * as path from 'path';
+import { URL } from 'url';
 
 export function onHttpRequest(this: ChromeDevToolsProxyServer,
                               request: http.IncomingMessage, response: http.ServerResponse) {
-  let url = request.url || '';
-  if (url === '/json') {
-    url = '/json/list';
-  }
-
-  if (request.method !== 'GET' || url.slice(0, 6) !== '/json/') {
+  if (request.method !== 'GET') {
+    response.setHeader('Allow', 'GET');
+    response.statusCode = 405;
+    response.end();
     return;
   }
 
-  const cmd = url.slice(6);
+  const url = new URL(request.url || '', `http://${this.host}:${this.port}`);
+  const pathSegments = url.pathname.split('/');
+  if (pathSegments[0] !== '' || pathSegments[1] !== 'json') {
+    response.statusCode = 404;
+    response.end();
+    return;
+  }
+
+  const command = pathSegments[2] || 'list';
   let result = undefined;
-  switch (cmd) {
+  switch (command) {
     case 'version':
       result = {
         'Browser': JERRY_DEBUGGER_VERSION,

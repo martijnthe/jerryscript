@@ -33,10 +33,10 @@ export const JERRY_DEBUGGER_VERSION = 'jerry-debugger/v0.0.1';
 export const DEVTOOLS_PROTOCOL_VERSION = '1.1';
 
 export class ChromeDevToolsProxyServer {
-  host: string;
-  port: number;
-  uuid: string;
-  jsfile: string;
+  readonly host: string;
+  readonly port: number;
+  readonly uuid: string;
+  readonly jsfile: string;
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
     const server = http.createServer();
