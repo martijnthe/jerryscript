@@ -21,6 +21,10 @@ describe('onHttpRequest', () => {
     port: 9229,
     jsfile: 'foo/bar/baz.js',
   };
+  const request = {
+    method: 'GET',
+    url: '',
+  };
   const response = {
     statusCode: 200,
     setHeader: jest.fn(),
@@ -30,31 +34,26 @@ describe('onHttpRequest', () => {
 
   // clean up before each test
   beforeEach(() => {
+    request.method = 'GET';
     response.statusCode = 200;
   });
 
   it('responds to POST with 405', () => {
-    const request = {};
+    request.method = 'POST';
     onHttpRequest.call(proxy, request, response);
     expect(response.statusCode).toEqual(405);
     expect(response.end).toBeCalled();
   });
 
   it('responds to unexpected path with 404', () => {
-    const request = {
-      method: 'GET',
-      url: '/foo',
-    };
+    request.url = '/foo';
     onHttpRequest.call(proxy, request, response);
     expect(response.statusCode).toEqual(404);
     expect(response.end).toBeCalled();
   });
 
   it('responds to version query with JSON', () => {
-    const request = {
-      method: 'GET',
-      url: '/json/version',
-    };
+    request.url = '/json/version';
     onHttpRequest.call(proxy, request, response);
     expect(response.statusCode).toEqual(200);
     expect(response.end).toBeCalled();
@@ -68,10 +67,7 @@ describe('onHttpRequest', () => {
   let saveJSON = '';
 
   it('responds to /json query with JSON', () => {
-    const request = {
-      method: 'GET',
-      url: '/json',
-    };
+    request.url = '/json';
     onHttpRequest.call(proxy, request, response);
     expect(response.statusCode).toEqual(200);
     expect(response.end).toBeCalled();
@@ -87,10 +83,7 @@ describe('onHttpRequest', () => {
   });
 
   it('responds to list query with the same JSON', () => {
-    const request = {
-      method: 'GET',
-      url: '/json',
-    };
+    request.url = '/json/list';
     onHttpRequest.call(proxy, request, response);
     expect(response.statusCode).toEqual(200);
     expect(response.end).toBeCalled();
@@ -99,10 +92,7 @@ describe('onHttpRequest', () => {
   });
 
   it('responds to unexpected json query with 404', () => {
-    const request = {
-      method: 'GET',
-      url: '/json/foo',
-    };
+    request.url = '/json/foo';
     onHttpRequest.call(proxy, request, response);
     expect(response.statusCode).toEqual(404);
     expect(response.end).toBeCalled();
