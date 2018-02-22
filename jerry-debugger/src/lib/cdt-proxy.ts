@@ -16,13 +16,40 @@ import * as WebSocket from 'ws';
 import WebSocketServer = WebSocket.Server;
 import * as rpc from 'noice-json-rpc';
 import Crdp from 'chrome-remote-debug-protocol';
+import * as http from 'http';
+import uuid from 'uuid/v1';
+import { onHttpRequest } from './cdt-proxy-http';
 
-export interface ChromeDevToolsProxyServerOptions extends WebSocket.ServerOptions {
+export interface ChromeDevToolsProxyServerOptions {
+  port?: number;
+  host?: string;
+  uuid?: string;
+  jsfile?: string;
 }
 
+export const DEFAULT_SERVER_HOST = '127.0.0.1';
+export const DEFAULT_SERVER_PORT = 9229;
+export const JERRY_DEBUGGER_VERSION = 'jerry-debugger/v0.0.1';
+export const DEVTOOLS_PROTOCOL_VERSION = '1.1';
+
 export class ChromeDevToolsProxyServer {
+  readonly host: string;
+  readonly port: number;
+  readonly uuid: string;
+  readonly jsfile: string;
+
   constructor(options: ChromeDevToolsProxyServerOptions) {
-    const wss = new WebSocketServer(options);
+    const server = http.createServer();
+
+    this.host = options.host || DEFAULT_SERVER_HOST;
+    this.port = options.port || DEFAULT_SERVER_PORT;
+    this.uuid = options.uuid || uuid();
+    // FIXME: probably not quite right, can include ../.. etc.
+    this.jsfile = options.jsfile || 'untitled.js';
+
+    server.listen(this.port);
+
+    const wss = new WebSocketServer({ server });
     const rpcServer = new rpc.Server(wss);
     const api: Crdp.CrdpServer = rpcServer.api();
 
@@ -36,13 +63,14 @@ export class ChromeDevToolsProxyServer {
       ws.send('hello');
     });
 
+    server.on('request', onHttpRequest.bind(this));
+
     rpcServer.setLogging({
       logEmit: true,
       logConsole: true,
     });
 
-      //
-      // // Lifted from the example on https://github.com/nojvek/noice-json-rpc
+    // Lifted from the example on https://github.com/nojvek/noice-json-rpc
     const enable = async () => {
       console.log('enable called!');
     };

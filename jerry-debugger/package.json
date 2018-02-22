@@ -19,16 +19,18 @@
   "license": "Apache-2.0",
   "private": false,
   "dependencies": {
+    "chrome-remote-debug-protocol": "^1.2.20170721",
     "minimist": "^1.2.0",
     "noice-json-rpc": "^1.1.1",
+    "uuid": "^3.2.1",
     "ws": "^3.3.2"
   },
   "devDependencies": {
     "@types/jest": "^22.1.2",
     "@types/minimist": "^1.2.0",
     "@types/node": "^9.4.6",
+    "@types/uuid": "^3.4.3",
     "@types/ws": "^4.0.1",
-    "chrome-remote-debug-protocol": "^1.2.20170721",
     "jest": "^22.3.0",
     "ts-jest": "^22.0.4",
     "tslint": "^5.9.1",
