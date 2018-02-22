@@ -64,8 +64,6 @@ describe('onHttpRequest', () => {
     expect(obj['Protocol-Version']).toBeDefined();
   });
 
-  let saveJSON = '';
-
   it('responds to /json query with JSON', () => {
     request.url = '/json';
     onHttpRequest.call(proxy, request, response);
@@ -73,8 +71,8 @@ describe('onHttpRequest', () => {
     expect(response.end).toBeCalled();
     expect(response.write).toHaveBeenCalled();
 
-    saveJSON = response.write.mock.calls[0][0];
-    const array = JSON.parse(saveJSON);
+    const json = response.write.mock.calls[0][0];
+    const array = JSON.parse(json);
     expect(array).toHaveLength(1);
     expect(array[0].description).toBeDefined();
     expect(array[0].devtoolsFrontendUrl).toBeDefined();
@@ -83,12 +81,16 @@ describe('onHttpRequest', () => {
   });
 
   it('responds to list query with the same JSON', () => {
+    request.url = '/json';
+    onHttpRequest.call(proxy, request, response);
+    const json = response.write.mock.calls[0][0];
+
     request.url = '/json/list';
     onHttpRequest.call(proxy, request, response);
     expect(response.statusCode).toEqual(200);
     expect(response.end).toBeCalled();
     expect(response.write).toHaveBeenCalled();
-    expect(response.write.mock.calls[0][0]).toEqual(saveJSON);
+    expect(response.write.mock.calls[0][0]).toEqual(json);
   });
 
   it('responds to unexpected json query with 404', () => {
