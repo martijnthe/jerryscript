@@ -44,7 +44,7 @@ export function getOptionsFromArgs(argv: Array<string>) {
   const target = args['inspect-brk'];
   return {
     ...getHostAndPort(target),
-    verbose: Boolean(args['verbose']),
+    verbose: args['verbose'],
     jsfile: args._[0],
   };
 }
