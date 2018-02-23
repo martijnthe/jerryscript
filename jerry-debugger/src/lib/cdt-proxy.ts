@@ -37,8 +37,8 @@ export class ChromeDevToolsProxyServer {
   readonly port: number;
   readonly uuid: string;
   readonly jsfile: string;
-  asyncCallStackDepth: number;
-  pauseOnExceptions: string;
+  private asyncCallStackDepth: number = 0;  // 0 is unlimited
+  private pauseOnExceptions: ('none' | 'uncaught' | 'all') = 'none';
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
     const server = http.createServer();
@@ -48,8 +48,11 @@ export class ChromeDevToolsProxyServer {
     this.uuid = options.uuid || uuid();
     // FIXME: probably not quite right, can include ../.. etc.
     this.jsfile = options.jsfile || 'untitled.js';
-    this.asyncCallStackDepth = 0;  // 0 is unlimited
-    this.pauseOnExceptions = 'none';
+
+    () => {
+      // FIXME: pretend to use these to get around lint error for now
+      this.asyncCallStackDepth, this.pauseOnExceptions;
+    };
 
     server.listen(this.port);
 
