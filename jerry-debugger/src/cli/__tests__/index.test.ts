@@ -29,7 +29,7 @@ describe('getOptionsFromArgs', () => {
     expect(opt.port).toEqual(1234);
   });
 
-  it('defaults to verbose false', () => {
+  it('verbose defaults to false', () => {
     const opt = getOptionsFromArgs([]);
     expect(opt.verbose).toEqual(false);
   });
@@ -44,8 +44,13 @@ describe('getOptionsFromArgs', () => {
     expect(opt.verbose).toEqual(true);
   });
 
-  it('returns positional arg as jsfile', () => {
-    const opt = getOptionsFromArgs(['foo/bar.js']);
+  it('jsfile defaults to untitled.js', () => {
+    const opt = getOptionsFromArgs([]);
+    expect(opt.jsfile).toEqual('untitled.js');
+  });
+
+  it('returns client source as jsfile', () => {
+    const opt = getOptionsFromArgs(['--client-source', 'foo/bar.js']);
     expect(opt.jsfile).toEqual('foo/bar.js');
   });
 

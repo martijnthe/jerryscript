@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import { ChromeDevToolsProxyServer, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../lib/cdt-proxy';
+import { JerryDebugger } from '../lib/debugger-client';
 import parseArgs from 'minimist';
 
 function getHostAndPort(input: string) {
@@ -27,6 +28,7 @@ function getHostAndPort(input: string) {
 export function getOptionsFromArgs(argv: Array<string>) {
   const args = parseArgs(argv, {
     default: {
+      'client-source': '',
       'inspect-brk': `${DEFAULT_SERVER_HOST}:${DEFAULT_SERVER_PORT}`,
       'verbose': false,
     },
@@ -37,6 +39,7 @@ export function getOptionsFromArgs(argv: Array<string>) {
       'verbose',
     ],
     string: [
+      'client-source',
       'inspect-brk',
     ],
   });
@@ -45,17 +48,24 @@ export function getOptionsFromArgs(argv: Array<string>) {
   return {
     ...getHostAndPort(target),
     verbose: args['verbose'],
-    jsfile: args._[0],
+    address: args._[0] || '',
+    jsfile: args['client-source'] || 'untitled.js',
   };
 }
 
 export function main(proc: NodeJS.Process) {
   const options = getOptionsFromArgs(proc.argv.slice(2));
-  const msg = `Debugger listening on ws://${options.host}:${options.port}\n`;
-  proc.stdout.write(msg);
-  new ChromeDevToolsProxyServer({
-    host: options.host,
-    port: options.port,
-    jsfile: options.jsfile,
+  const jdebug = new JerryDebugger(options.address);
+  const debuggerUrl = `ws://${jdebug.host}:${jdebug.port}`;
+  jdebug.getConnectPromise().then(() => {
+    proc.stdout.write(`Connected to debugger at ${debuggerUrl}\n`);
+    proc.stdout.write(`Proxy listening at ws://${options.host}:${options.port}\n`);
+    new ChromeDevToolsProxyServer({
+      host: options.host,
+      port: options.port,
+      jsfile: options.jsfile,
+    });
+  }).catch(() => {
+    proc.stdout.write(`Debugger not found at ${debuggerUrl}\n`);
   });
 }
