@@ -74,17 +74,14 @@ export class ChromeDevToolsProxyServer {
       console.log('Function not implemented');
     };
 
-    // QUESTION: is there a better way to do this?
-    const proxy = this;
-
     api.Debugger.expose({
       enable: notImplemented,
       setBlackboxPatterns: notImplemented,
-      async setAsyncCallStackDepth(params) {
-        proxy.asyncCallStackDepth = params.maxDepth;
+      setAsyncCallStackDepth: async (params) => {
+        this.asyncCallStackDepth = params.maxDepth;
       },
-      async setPauseOnExceptions(params) {
-        proxy.pauseOnExceptions = params.state;
+      setPauseOnExceptions: async (params) => {
+        this.pauseOnExceptions = params.state;
       },
     });
     api.Profiler.expose({ enable: notImplemented });
