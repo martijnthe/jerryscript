@@ -29,4 +29,24 @@ describe('getOptionsFromArgs', () => {
     expect(opt.port).toEqual(1234);
   });
 
+  it('defaults to verbose false', () => {
+    const opt = getOptionsFromArgs([]);
+    expect(opt.verbose).toEqual(false);
+  });
+
+  it('parses verbose flag', () => {
+    const opt = getOptionsFromArgs(['--verbose']);
+    expect(opt.verbose).toEqual(true);
+  });
+
+  it('parses v alias for verbose', () => {
+    const opt = getOptionsFromArgs(['-v']);
+    expect(opt.verbose).toEqual(true);
+  });
+
+  it('returns positional arg as jsfile', () => {
+    const opt = getOptionsFromArgs(['foo/bar.js']);
+    expect(opt.jsfile).toEqual('foo/bar.js');
+  });
+
 });

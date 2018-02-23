@@ -28,7 +28,14 @@ export function getOptionsFromArgs(argv: Array<string>) {
   const args = parseArgs(argv, {
     default: {
       'inspect-brk': `${DEFAULT_SERVER_HOST}:${DEFAULT_SERVER_PORT}`,
+      'verbose': false,
     },
+    alias: {
+      'verbose': 'v',
+    },
+    boolean: [
+      'verbose',
+    ],
     string: [
       'inspect-brk',
     ],
@@ -37,6 +44,7 @@ export function getOptionsFromArgs(argv: Array<string>) {
   const target = args['inspect-brk'];
   return {
     ...getHostAndPort(target),
+    verbose: args['verbose'],
     jsfile: args._[0],
   };
 }
