@@ -37,6 +37,8 @@ export class ChromeDevToolsProxyServer {
   readonly port: number;
   readonly uuid: string;
   readonly jsfile: string;
+  private asyncCallStackDepth: number = 0;  // 0 is unlimited
+  private pauseOnExceptions: ('none' | 'uncaught' | 'all') = 'none';
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
     const server = http.createServer();
@@ -47,6 +49,11 @@ export class ChromeDevToolsProxyServer {
     // FIXME: probably not quite right, can include ../.. etc.
     this.jsfile = options.jsfile || 'untitled.js';
 
+    () => {
+      // FIXME: pretend to use these to get around lint error for now
+      this.asyncCallStackDepth, this.pauseOnExceptions;
+    };
+
     server.listen(this.port);
 
     const wss = new WebSocketServer({ server });
@@ -56,11 +63,6 @@ export class ChromeDevToolsProxyServer {
     wss.on('connection', function connection(ws, req) {
       const ip = req.connection.remoteAddress;
       console.log(`connection from: ${ip}`);
-
-      ws.on('message', function incoming(message) {
-        console.log('received: %s', message);
-      });
-      ws.send('hello');
     });
 
     server.on('request', onHttpRequest.bind(this));
@@ -70,14 +72,25 @@ export class ChromeDevToolsProxyServer {
       logConsole: true,
     });
 
-    // Lifted from the example on https://github.com/nojvek/noice-json-rpc
-    const enable = async () => {
-      console.log('enable called!');
+    // Based on the example from https://github.com/nojvek/noice-json-rpc
+    const notImplemented = async () => {
+      console.log('Function not implemented');
     };
 
-    api.Debugger.expose({ enable });
+    api.Debugger.expose({
+      enable: notImplemented,
+      setBlackboxPatterns: notImplemented,
+      setAsyncCallStackDepth: async (params) => {
+        this.asyncCallStackDepth = params.maxDepth;
+      },
+      setPauseOnExceptions: async (params) => {
+        this.pauseOnExceptions = params.state;
+      },
+    });
+    api.Profiler.expose({ enable: notImplemented });
     api.Runtime.expose({
-      enable,
+      enable: notImplemented,
+      runIfWaitingForDebugger: notImplemented,
       async runScript() {
         console.log('runScript called!');
         return {
