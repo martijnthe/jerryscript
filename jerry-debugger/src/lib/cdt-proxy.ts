@@ -27,7 +27,7 @@ export interface ChromeDevToolsProxyServerOptions {
   jsfile?: string;
 }
 
-export const DEFAULT_SERVER_HOST = '127.0.0.1';
+export const DEFAULT_SERVER_HOST = 'localhost';
 export const DEFAULT_SERVER_PORT = 9229;
 export const JERRY_DEBUGGER_VERSION = 'jerry-debugger/v0.0.1';
 export const DEVTOOLS_PROTOCOL_VERSION = '1.1';

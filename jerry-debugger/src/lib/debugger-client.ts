@@ -14,34 +14,53 @@
 
 import WebSocket from 'ws';
 
+export interface JerryDebuggerOptions {
+  host?: string;
+  port?: number;
+  verbose?: boolean;
+}
+
+export const DEFAULT_DEBUGGER_HOST = 'localhost';
+export const DEFAULT_DEBUGGER_PORT = 5001;
+
 export class JerryDebugger {
   readonly host: string;
   readonly port: number;
-  private _socket: WebSocket | undefined = undefined;
-  private _connectPromise: Promise<void>;
+  readonly verbose: boolean;
+  private socket?: WebSocket;
 
-  constructor(address: string) {
-    // NOTE: It seems pretty clean to keep the defaults hidden within the class like this.
-    // This was how the .py version did it, maybe I should do this for proxy too?
-    const hostAndPort = address.split(':');
-    this.host = hostAndPort[0] || 'localhost';
-    this.port = parseInt(hostAndPort[1], 10) || 5001;
+  constructor(options: JerryDebuggerOptions) {
+    this.host = options.host || DEFAULT_DEBUGGER_HOST;
+    this.port = options.port || DEFAULT_DEBUGGER_PORT;
+    this.verbose = options.verbose || false;
+  }
 
-    this._connectPromise = new Promise((resolve, reject) => {
-      this._socket = new WebSocket(`ws://${this.host}:${this.port}/jerry-debugger`);
-      this._socket.binaryType = 'arraybuffer';
+  connect() {
+    if (this.socket) {
+      this.disconnect();
+    }
+    this.socket = new WebSocket(`ws://${this.host}:${this.port}/jerry-debugger`);
+    this.socket.binaryType = 'arraybuffer';
+    return new Promise((resolve, reject) => {
+      if (!this.socket) {
+        reject();
+        return;
+      }
 
-      this._socket.on('open', () => {
+      this.socket.on('open', () => {
         resolve();
       });
 
-      this._socket.on('error', () => {
-        reject();
+      this.socket.on('error', (err) => {
+        reject(err);
       });
     });
   }
 
-  getConnectPromise(): Promise<void> {
-    return this._connectPromise;
+  disconnect() {
+    if (this.socket) {
+      this.socket.terminate();
+      this.socket = undefined;
+    }
   }
 }
