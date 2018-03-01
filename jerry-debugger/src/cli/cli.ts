@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { ChromeDevToolsProxyServer } from '../lib/cdt-proxy';
-import { JerryDebugger } from '../lib/debugger-client';
+import { JerryDebuggerClient } from '../lib/debugger-client';
 import parseArgs from 'minimist';
 
 /**
@@ -60,7 +60,7 @@ export function getOptionsFromArgs(argv: Array<string>) {
 
 export function main(proc: NodeJS.Process) {
   const options = getOptionsFromArgs(proc.argv.slice(2));
-  const jdebug = new JerryDebugger(options.remoteAddress);
+  const jdebug = new JerryDebuggerClient(options.remoteAddress);
   const debuggerUrl = `ws://${jdebug.host}:${jdebug.port}`;
   jdebug.connect().then(() => {
     console.log(`Connected to debugger at ${debuggerUrl}`);
