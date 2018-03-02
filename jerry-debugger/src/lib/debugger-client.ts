@@ -37,7 +37,7 @@ export class JerryDebugger {
 
   connect() {
     if (this.socket) {
-      this.disconnect();
+      return Promise.resolve();
     }
     this.socket = new WebSocket(`ws://${this.host}:${this.port}/jerry-debugger`);
     this.socket.binaryType = 'arraybuffer';
