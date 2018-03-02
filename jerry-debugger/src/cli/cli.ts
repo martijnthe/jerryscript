@@ -12,23 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { ChromeDevToolsProxyServer, DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from '../lib/cdt-proxy';
+import { ChromeDevToolsProxyServer } from '../lib/cdt-proxy';
+import { JerryDebugger } from '../lib/debugger-client';
 import parseArgs from 'minimist';
 
+/**
+ * Converts string of format [host:][port] to an object with host and port,
+ * each possibly undefined
+ */
 function getHostAndPort(input: string) {
   const hostAndPort = input.split(':');
-  const onlyPort = (hostAndPort.length === 1);
+  const portIndex = hostAndPort.length - 1;
+  const host = hostAndPort[portIndex - 1];
+  const port = hostAndPort[portIndex];
   return {
-    host: onlyPort ? DEFAULT_SERVER_HOST : hostAndPort[0],
-    port: Number(onlyPort ? hostAndPort[0] : hostAndPort[1]),
+    host: host ? host : undefined,
+    port: port ? Number(port) : undefined,
   };
 }
 
 export function getOptionsFromArgs(argv: Array<string>) {
   const args = parseArgs(argv, {
     default: {
-      'inspect-brk': `${DEFAULT_SERVER_HOST}:${DEFAULT_SERVER_PORT}`,
       'verbose': false,
+      'inspect-brk': '',
+      'jerry-remote': '',
     },
     alias: {
       'verbose': 'v',
@@ -38,24 +46,31 @@ export function getOptionsFromArgs(argv: Array<string>) {
     ],
     string: [
       'inspect-brk',
+      'jerry-remote',
     ],
   });
 
-  const target = args['inspect-brk'];
   return {
-    ...getHostAndPort(target),
+    proxyAddress: getHostAndPort(args['inspect-brk']),
+    remoteAddress: getHostAndPort(args['jerry-remote']),
+    jsfile: args._[0] || 'untitled.js',
     verbose: args['verbose'],
-    jsfile: args._[0],
   };
 }
 
 export function main(proc: NodeJS.Process) {
   const options = getOptionsFromArgs(proc.argv.slice(2));
-  const msg = `Debugger listening on ws://${options.host}:${options.port}\n`;
-  proc.stdout.write(msg);
-  new ChromeDevToolsProxyServer({
-    host: options.host,
-    port: options.port,
-    jsfile: options.jsfile,
+  const jdebug = new JerryDebugger(options.remoteAddress);
+  const debuggerUrl = `ws://${jdebug.host}:${jdebug.port}`;
+  jdebug.connect().then(() => {
+    console.log(`Connected to debugger at ${debuggerUrl}`);
+    const proxy = new ChromeDevToolsProxyServer({
+      ...options.proxyAddress,
+      jsfile: options.jsfile,
+    });
+    console.log(`Proxy listening at ws://${proxy.host}:${proxy.port}`);
+  }).catch((err) => {
+    console.log(`Error connecting to debugger at ${debuggerUrl}`);
+    console.log(err);
   });
 }
