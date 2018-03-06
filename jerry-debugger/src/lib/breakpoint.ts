@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { ParserStackFrame } from './parsed-source';
+import { ParserStackFrame } from './protocol-parser';
 
 export interface BreakpointMap {
   [index: number]: Breakpoint;
