@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { getFormatSize, decodeMessage } from '../utils';
+import { getFormatSize, decodeMessage, cesu8ToString } from '../utils';
 
 const defConfig = {
   cpointerSize: 2,
@@ -127,4 +127,40 @@ describe('decodeMessage', () => {
       }, 'C', array);
     }).toThrow();
   });
+});
+
+describe('cesu8ToString', () => {
+  it('returns empty string for undefined input', () => {
+    expect(cesu8ToString(undefined)).toEqual('');
+  });
+
+  it('returns ASCII from ASCII', () => {
+    const sentence = 'The quick brown fox jumped over the lazy dog.';
+    const array = new Uint8Array(sentence.length);
+    for (let i = 0; i < sentence.length; i++) {
+      array[i] = sentence.charCodeAt(i);
+    }
+    expect(cesu8ToString(array)).toEqual(sentence);
+  });
+
+  it('acts like UTF-8 for two-byte encodings', () => {
+    // 0x080 = 00010 000000 = 0x02, 0x00
+    const lowTwoByte = Uint8Array.from([0xc0 + 0x02, 0x80 + 0x00]);
+    // 0x7ff = 11111 111111 = 0x1f, 0x3f
+    const highTwoByte = Uint8Array.from([0xc0 + 0x1f, 0x80 + 0x3f]);
+    expect(cesu8ToString(lowTwoByte)).toEqual(String.fromCharCode(0x80));
+    expect(cesu8ToString(highTwoByte)).toEqual(String.fromCharCode(0x7ff));
+  });
+
+  it('acts like UTF-8 for three-byte encodings', () => {
+    // 0x0800 = 0000 100000 000000 = 0x00, 0x20, 0x00
+    const lowThreeByte = Uint8Array.from([0xe0 + 0x00, 0x80 + 0x20, 0x80 + 0x00]);
+    // 0xffff = 1111 111111 111111 = 0x0f, 0x3f, 0x3f
+    const highThreeByte = Uint8Array.from([0xe0 + 0x0f, 0x80 + 0x3f, 0x80 + 0x3f]);
+    expect(cesu8ToString(lowThreeByte)).toEqual(String.fromCharCode(0x0800));
+    expect(cesu8ToString(highThreeByte)).toEqual(String.fromCharCode(0xffff));
+  });
+
+  // TODO: test the part of CESU-8 incompatible with UTF-8; however, the existing
+  //   debugger client code didn't actually support this
 });
