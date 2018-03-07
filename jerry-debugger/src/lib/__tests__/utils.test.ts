@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { getFormatSize, decodeMessage, cesu8ToString } from '../utils';
+import { getFormatSize, decodeMessage, cesu8ToString, concatUint8Arrays } from '../utils';
 
 const defConfig = {
   cpointerSize: 2,
@@ -163,4 +163,29 @@ describe('cesu8ToString', () => {
 
   // TODO: test the part of CESU-8 incompatible with UTF-8; however, the existing
   //   debugger client code didn't actually support this
+});
+
+describe('concatUint8Arrays', () => {
+  it('drops the first byte of the second arg if first is undefined', () => {
+    const array = Uint8Array.from([1, 2, 3]);
+    expect(concatUint8Arrays(undefined, array)).toEqual(Uint8Array.from([2, 3]));
+  });
+
+  it('returns first array if second empty', () => {
+    const array1 = Uint8Array.from([1, 2, 3]);
+    const array2 = new Uint8Array([]);
+    expect(concatUint8Arrays(array1, array2)).toEqual(Uint8Array.from([1, 2, 3]));
+  });
+
+  it('returns first array if second has one byte', () => {
+    const array1 = Uint8Array.from([1, 2, 3]);
+    const array2 = new Uint8Array([4]);
+    expect(concatUint8Arrays(array1, array2)).toEqual(Uint8Array.from([1, 2, 3]));
+  });
+
+  it('concatenates two arrays dropping first byte of the second one', () => {
+    const array1 = Uint8Array.from([1, 2, 3]);
+    const array2 = new Uint8Array([4, 5, 6]);
+    expect(concatUint8Arrays(array1, array2)).toEqual(Uint8Array.from([1, 2, 3, 5, 6]));
+  });
 });
