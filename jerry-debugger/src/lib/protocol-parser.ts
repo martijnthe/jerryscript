@@ -41,15 +41,15 @@ export interface JerryDebugProtocolDelegate {
 }
 
 export interface JerryMessageScriptParsed {
-  scriptId: number,
-  name: string,
-  endLine: number,
-  endColumn: number,
-  hasSourceURL: boolean,
-};
+  scriptId: number;
+  name: string;
+  endLine: number;
+  endColumn: number;
+  hasSourceURL: boolean;
+}
 
 interface ProtocolFunctionMap {
-  [type: number]: (data: Uint8Array) => void,
+  [type: number]: (data: Uint8Array) => void;
 }
 
 interface FunctionMap {
@@ -76,10 +76,6 @@ export class JerryDebugProtocolHandler {
   private functions: FunctionMap = {};
   private lastScriptID: number = 0;
 
-  unused() {
-    this.maxMessageSize, this.sourceNameData, this.functionName;
-  }
-
   constructor(delegate: JerryDebugProtocolDelegate) {
     this.delegate = delegate;
 
@@ -93,7 +89,7 @@ export class JerryDebugProtocolHandler {
       [SP.JERRY_DEBUGGER_SOURCE_CODE_END]: this.onSourceCode,
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME]: this.onSourceCodeName,
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END]: this.onSourceCodeName,
-    }
+    };
 
     this.stack = [{
       isFunc: false,
@@ -106,10 +102,9 @@ export class JerryDebugProtocolHandler {
     }];
   }
 
-  private abort(message: string) {
-    if (this.delegate.onError) {
-      this.delegate.onError(message);
-    }
+  // for the temporary mollification of lint
+  unused() {
+    this.maxMessageSize;
   }
 
   onConfiguration(data: Uint8Array) {
@@ -117,14 +112,15 @@ export class JerryDebugProtocolHandler {
     if (data.length !== 5) {
       this.abort('configuration message wrong size');
     }
-    if (this.cpointerSize !== 2 && this.cpointerSize !== 4) {
-      this.abort('compressed pointer must be 2 or 4 bytes long');
-    }
 
     this.maxMessageSize = data[1];
     this.cpointerSize = data[2];
     this.littleEndian = Boolean(data[3]);
     this.version = data[4];
+
+    if (this.cpointerSize !== 2 && this.cpointerSize !== 4) {
+      this.abort('compressed pointer must be 2 or 4 bytes long');
+    }
 
     if (this.version !== JERRY_DEBUGGER_VERSION) {
       this.abort('incorrect target debugger version detected: ' + this.version
@@ -172,15 +168,14 @@ export class JerryDebugProtocolHandler {
 
   onBreakpointList(data: Uint8Array) {
     console.log('[Breakpoint List]');
-    if (data.byteLength % 4 != 1 || data.byteLength < 1 + 4) {
+    if (data.byteLength % 4 !== 1 || data.byteLength < 1 + 4) {
       throw new Error('unexpected breakpoint list message length');
     }
 
     let array: Array<number>;
     if (data[0] === SP.JERRY_DEBUGGER_BREAKPOINT_LIST) {
       array = this.stack[this.stack.length - 1].lines;
-    }
-    else {
+    } else {
       array = this.stack[this.stack.length - 1].offsets;
     }
 
@@ -305,6 +300,12 @@ export class JerryDebugProtocolHandler {
       handler.call(this, message);
     } else {
       console.log('unhandled protocol message type', message[0]);
+    }
+  }
+
+  private abort(message: string) {
+    if (this.delegate.onError) {
+      this.delegate.onError(message);
     }
   }
 }

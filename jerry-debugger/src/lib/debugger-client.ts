@@ -29,8 +29,9 @@ export class JerryDebuggerClient {
   readonly host: string;
   readonly port: number;
   readonly verbose: boolean;
-  private socket?: WebSocket;
   private protocolHandler: JerryDebugProtocolHandler;
+  private socket?: WebSocket;
+  private connectPromise?: Promise<void>;
 
   constructor(options: JerryDebuggerOptions) {
     this.host = options.host || DEFAULT_DEBUGGER_HOST;
@@ -39,17 +40,18 @@ export class JerryDebuggerClient {
     this.protocolHandler = new JerryDebugProtocolHandler(this);
   }
 
-  connect() {
-    if (this.socket) {
-      return Promise.resolve();
+  connect(): Promise<void> {
+    if (this.connectPromise) {
+      return this.connectPromise;
     }
+
     this.socket = new WebSocket(`ws://${this.host}:${this.port}/jerry-debugger`);
     this.socket.binaryType = 'arraybuffer';
     this.socket.on('message', this.onMessage.bind(this));
 
-    return new Promise((resolve, reject) => {
+    this.connectPromise = new Promise((resolve, reject) => {
       if (!this.socket) {
-        reject();
+        reject(new Error('socket missing'));
         return;
       }
 
@@ -61,6 +63,8 @@ export class JerryDebuggerClient {
         reject(err);
       });
     });
+
+    return this.connectPromise;
   }
 
   disconnect() {
@@ -75,5 +79,6 @@ export class JerryDebuggerClient {
   }
 
   onError(message: string) {
+    console.log('Error:', message);
   }
 }
