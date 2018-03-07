@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import assert from 'assert';
-
 import * as SP from './jrs-protocol-constants';
-import { cesu8ToString, concatUint8Arrays } from './string-utils';
 import { ParsedFunction } from './breakpoint';
+import { ByteConfig, cesu8ToString, concatUint8Arrays, decodeMessage } from './utils';
 
 // expected JerryScript debugger protocol version
 const JERRY_DEBUGGER_VERSION = 1;
@@ -62,8 +60,7 @@ export class JerryDebugProtocolHandler {
 
   // debugger configuration
   private maxMessageSize: number = 0;
-  private cpointerSize: number = 0;
-  private littleEndian: boolean = true;
+  private byteConfig: ByteConfig;
   private version: number = 0;
   private functionMap: ProtocolFunctionMap;
 
@@ -78,6 +75,11 @@ export class JerryDebugProtocolHandler {
 
   constructor(delegate: JerryDebugProtocolDelegate) {
     this.delegate = delegate;
+
+    this.byteConfig = {
+      cpointerSize: 0,
+      littleEndian: true,
+    };
 
     this.functionMap = {
       [SP.JERRY_DEBUGGER_CONFIGURATION]: this.onConfiguration,
@@ -107,6 +109,10 @@ export class JerryDebugProtocolHandler {
     this.maxMessageSize;
   }
 
+  decodeMessage(format: string, message: Uint8Array, offset: number) {
+    return decodeMessage(this.byteConfig, format, message, offset);
+  }
+
   onConfiguration(data: Uint8Array) {
     console.log('[Configuration]');
     if (data.length !== 5) {
@@ -114,11 +120,11 @@ export class JerryDebugProtocolHandler {
     }
 
     this.maxMessageSize = data[1];
-    this.cpointerSize = data[2];
-    this.littleEndian = Boolean(data[3]);
+    this.byteConfig.cpointerSize = data[2];
+    this.byteConfig.littleEndian = Boolean(data[3]);
     this.version = data[4];
 
-    if (this.cpointerSize !== 2 && this.cpointerSize !== 4) {
+    if (this.byteConfig.cpointerSize !== 2 && this.byteConfig.cpointerSize !== 4) {
       this.abort('compressed pointer must be 2 or 4 bytes long');
     }
 
@@ -212,76 +218,6 @@ export class JerryDebugProtocolHandler {
     }
   }
 
-  getFormatSize(format: string) {
-    let length = 0;
-    for (let i = 0; i < format.length; i++) {
-      switch (format[i]) {
-        case 'B':
-          length++;
-          break;
-
-        case 'C':
-          length += this.cpointerSize;
-          break;
-
-        case 'I':
-          length += 4;
-          break;
-
-        default:
-          throw new Error('unsupported message format');
-      }
-    }
-    return length;
-  }
-
-  decodeMessage(format: string, message: Uint8Array, offset = 0) {
-    // Format: B=byte I=int32 C=cpointer
-    // Returns an array of decoded numbers
-
-    const result = [];
-    let value;
-
-    if (offset + this.getFormatSize(format) > message.byteLength) {
-      this.abort('received message too short');
-    }
-
-    for (let i = 0; i < format.length; i++) {
-      if (format[i] === 'B') {
-        result.push(message[offset]);
-        offset++;
-        continue;
-      }
-
-      if (format[i] === 'C' && this.cpointerSize === 2) {
-        if (this.littleEndian) {
-          value = message[offset] | (message[offset + 1] << 8);
-        } else {
-          value = (message[offset] << 8) | message[offset + 1];
-        }
-
-        result.push(value);
-        offset += 2;
-        continue;
-      }
-
-      assert(format[i] === 'I' || (format[i] === 'C' && this.cpointerSize === 4));
-
-      if (this.littleEndian) {
-        value = (message[offset] | (message[offset + 1] << 8)
-                 | (message[offset + 2] << 16) | (message[offset + 3] << 24));
-      } else {
-        value = ((message[offset] << 24) | (message[offset + 1] << 16)
-                 | (message[offset + 2] << 8) | message[offset + 3] << 24);
-      }
-
-      result.push(value);
-      offset += 4;
-    }
-
-    return result;
-  }
-
   parseData(data: ArrayBuffer) {
     if (data.byteLength < 1) {
       this.abort('message too short');
@@ -289,7 +225,7 @@ export class JerryDebugProtocolHandler {
 
     const message = new Uint8Array(data);
 
-    if (this.cpointerSize === 0) {
+    if (this.byteConfig.cpointerSize === 0) {
       if (message[0] !== SP.JERRY_DEBUGGER_CONFIGURATION) {
         this.abort('the first message must be configuration');
       }
