@@ -117,6 +117,7 @@ export class JerryDebugProtocolHandler {
     console.log('[Configuration]');
     if (data.length !== 5) {
       this.abort('configuration message wrong size');
+      return;
     }
 
     this.maxMessageSize = data[1];
@@ -130,7 +131,7 @@ export class JerryDebugProtocolHandler {
 
     if (this.version !== JERRY_DEBUGGER_VERSION) {
       this.abort('incorrect target debugger version detected: ' + this.version
-                           + ' expected: ' + JERRY_DEBUGGER_VERSION);
+                 + ' expected: ' + JERRY_DEBUGGER_VERSION);
     }
   }
 
@@ -221,6 +222,7 @@ export class JerryDebugProtocolHandler {
   parseData(data: ArrayBuffer) {
     if (data.byteLength < 1) {
       this.abort('message too short');
+      return;
     }
 
     const message = new Uint8Array(data);
@@ -228,6 +230,7 @@ export class JerryDebugProtocolHandler {
     if (this.byteConfig.cpointerSize === 0) {
       if (message[0] !== SP.JERRY_DEBUGGER_CONFIGURATION) {
         this.abort('the first message must be configuration');
+        return;
       }
     }
 
@@ -235,12 +238,13 @@ export class JerryDebugProtocolHandler {
     if (handler) {
       handler.call(this, message);
     } else {
-      console.log('unhandled protocol message type', message[0]);
+      this.abort('unhandled protocol message type: ' + message[0]);
     }
   }
 
   private abort(message: string) {
     if (this.delegate.onError) {
+      console.log('Abort:', message);
       this.delegate.onError(message);
     }
   }
