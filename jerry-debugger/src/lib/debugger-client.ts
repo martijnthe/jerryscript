@@ -14,7 +14,7 @@
 
 import WebSocket from 'ws';
 
-import { JerryDebugProtocolHandler } from './protocol-parser';
+import { JerryDebugProtocolHandler } from './protocol-handler';
 
 export interface JerryDebuggerOptions {
   host?: string;
