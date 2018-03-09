@@ -67,6 +67,7 @@ export function main(proc: NodeJS.Process) {
     const proxy = new ChromeDevToolsProxyServer({
       ...options.proxyAddress,
       jsfile: options.jsfile,
+      debugger: jdebug,
     });
     console.log(`Proxy listening at ws://${proxy.host}:${proxy.port}`);
   }).catch((err) => {

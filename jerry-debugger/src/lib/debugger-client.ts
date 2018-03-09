@@ -14,7 +14,7 @@
 
 import WebSocket from 'ws';
 
-import { JerryDebugProtocolHandler } from './protocol-handler';
+import { JerryDebugProtocolHandler, JerryMessageScriptParsed } from './protocol-handler';
 
 export interface JerryDebuggerOptions {
   host?: string;
@@ -32,6 +32,7 @@ export class JerryDebuggerClient {
   private protocolHandler: JerryDebugProtocolHandler;
   private socket?: WebSocket;
   private connectPromise?: Promise<void>;
+  private scripts: Array<JerryMessageScriptParsed> = [];
 
   constructor(options: JerryDebuggerOptions) {
     this.host = options.host || DEFAULT_DEBUGGER_HOST;
@@ -80,5 +81,13 @@ export class JerryDebuggerClient {
 
   onError(message: string) {
     console.log('Error:', message);
+  }
+
+  onScriptParsed(message: JerryMessageScriptParsed) {
+    this.scripts.push(message);
+  }
+
+  getScripts() {
+    return this.scripts;
   }
 }

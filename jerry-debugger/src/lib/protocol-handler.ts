@@ -39,11 +39,9 @@ export interface JerryDebugProtocolDelegate {
 }
 
 export interface JerryMessageScriptParsed {
-  scriptId: number;
+  id: number;
   name: string;
-  endLine: number;
-  endColumn: number;
-  hasSourceURL: boolean;
+  lineCount: number;
 }
 
 interface ProtocolFunctionMap {
@@ -199,11 +197,9 @@ export class JerryDebugProtocolHandler {
       this.source = cesu8ToString(this.sourceData);
       if (this.delegate.onScriptParsed) {
         this.delegate.onScriptParsed({
-          'scriptId': ++this.lastScriptID,
+          'id': ++this.lastScriptID,
           'name': this.sourceName || '',
-          'endLine': this.source.split(/\r\n[\r\n]/).length,
-          'endColumn': 0,
-          'hasSourceURL': false,
+          'lineCount': this.source.split(/\r\n[\r\n]/).length,
         });
       }
     }

@@ -80,7 +80,7 @@ describe('onSourceCode', () => {
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
     const data = delegate.onScriptParsed.mock.calls[0][0];
-    expect(data.endLine).toEqual(1);
+    expect(data.lineCount).toEqual(1);
   });
 });
 

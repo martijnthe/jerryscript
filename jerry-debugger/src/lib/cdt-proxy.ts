@@ -19,8 +19,10 @@ import Crdp from 'chrome-remote-debug-protocol';
 import * as http from 'http';
 import uuid from 'uuid/v1';
 import { onHttpRequest } from './cdt-proxy-http';
+import { JerryDebuggerClient } from './debugger-client';
 
 export interface ChromeDevToolsProxyServerOptions {
+  debugger: JerryDebuggerClient;
   port?: number;
   host?: string;
   uuid?: string;
@@ -39,8 +41,12 @@ export class ChromeDevToolsProxyServer {
   readonly jsfile: string;
   private asyncCallStackDepth: number = 0;  // 0 is unlimited
   private pauseOnExceptions: ('none' | 'uncaught' | 'all') = 'none';
+  private debugger: JerryDebuggerClient;
+  private api: Crdp.CrdpServer;
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
+    this.debugger = options.debugger;
+
     const server = http.createServer();
 
     this.host = options.host || DEFAULT_SERVER_HOST;
@@ -58,7 +64,7 @@ export class ChromeDevToolsProxyServer {
 
     const wss = new WebSocketServer({ server });
     const rpcServer = new rpc.Server(wss);
-    const api: Crdp.CrdpServer = rpcServer.api();
+    this.api = rpcServer.api();
 
     wss.on('connection', function connection(ws, req) {
       const ip = req.connection.remoteAddress;
@@ -77,7 +83,7 @@ export class ChromeDevToolsProxyServer {
       console.log('Function not implemented');
     };
 
-    api.Debugger.expose({
+    this.api.Debugger.expose({
       enable: notImplemented,
       setBlackboxPatterns: notImplemented,
       setAsyncCallStackDepth: async (params) => {
@@ -87,10 +93,22 @@ export class ChromeDevToolsProxyServer {
         this.pauseOnExceptions = params.state;
       },
     });
-    api.Profiler.expose({ enable: notImplemented });
-    api.Runtime.expose({
+    this.api.Profiler.expose({ enable: notImplemented });
+    this.api.Runtime.expose({
       enable: notImplemented,
-      runIfWaitingForDebugger: notImplemented,
+      runIfWaitingForDebugger: async () => {
+        // how could i chain this to happen after the enable response goes out?
+        this.api.Runtime.emitExecutionContextCreated({
+          context: {
+            // might need to track multiple someday
+            id: 1,
+            origin: '',
+            // node seems to use node[<PID>] FWIW
+            name: 'jerryscript',
+          },
+        });
+        this.sendScripts();
+      },
       async runScript() {
         console.log('runScript called!');
         return {
@@ -102,5 +120,25 @@ export class ChromeDevToolsProxyServer {
         };
       },
     });
+  }
+
+  /**
+   * sends Debugger.scriptParsed events for all scripts already known
+   */
+  sendScripts() {
+    const scripts = this.debugger.getScripts();
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts[i];
+      this.api.Debugger.emitScriptParsed({
+        scriptId: String(script.id),
+        url: script.name,
+        startLine: 0,
+        startColumn: 0,
+        endLine: script.lineCount,
+        endColumn: 0,
+        executionContextId: 1,
+        hash: '',
+      });
+    }
   }
 }
