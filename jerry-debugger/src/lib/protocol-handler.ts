@@ -150,7 +150,7 @@ export class JerryDebugProtocolHandler {
 
     // FIXME: it seems like this is probably unnecessarily keeping the
     //   whole file's source to this point?
-    func.source = this.source.split(/\r\n[\r\n]/);
+    func.source = this.source.split(/\n[\n]/);
     func.sourceName = this.sourceName;
   }
 
@@ -199,7 +199,7 @@ export class JerryDebugProtocolHandler {
         this.delegate.onScriptParsed({
           'id': ++this.lastScriptID,
           'name': this.sourceName || '',
-          'lineCount': this.source.split(/\r\n[\r\n]/).length,
+          'lineCount': this.source.split(/\n[\n]/).length,
         });
       }
     }
