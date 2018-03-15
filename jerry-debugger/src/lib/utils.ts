@@ -92,7 +92,7 @@ export function decodeMessage(config: ByteConfig, format: string, message: Uint8
   return result;
 }
 
-export function cesu8ToString(array: Uint8Array | undefined) {
+export function cesu8ToString(array: Uint8Array | undefined): string {
   if (!array) {
     return '';
   }
