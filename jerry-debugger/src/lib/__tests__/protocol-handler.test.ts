@@ -84,7 +84,7 @@ describe('onSourceCode', () => {
   });
 });
 
-describe('parseData', () => {
+describe('onMessage', () => {
   const delegate = {
     onError: jest.fn(),
   };
@@ -95,22 +95,22 @@ describe('parseData', () => {
   });
 
   it('aborts when message too short', () => {
-    handler.parseData(new ArrayBuffer(0));
+    handler.onMessage(new ArrayBuffer(0));
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 
   it('aborts when first message is not configuration', () => {
     const array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_END, 1, 2, 3]);
-    handler.parseData(array.buffer);
+    handler.onMessage(array.buffer);
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 
   it('aborts when unhandled message sent', () => {
     const array = Uint8Array.from([SP.JERRY_DEBUGGER_CONFIGURATION, 200, 4, 1, 1]);
-    handler.parseData(array.buffer);
+    handler.onMessage(array.buffer);
     expect(delegate.onError).toHaveBeenCalledTimes(0);
     array[0] = 255;
-    handler.parseData(array.buffer);
+    handler.onMessage(array.buffer);
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 });

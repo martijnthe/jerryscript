@@ -14,13 +14,15 @@
 
 import WebSocket from 'ws';
 
-import { JerryDebugProtocolHandler, JerryMessageScriptParsed } from './protocol-handler';
-
 export interface JerryDebuggerOptions {
+  delegate: JerryDebuggerDelegate;
   host?: string;
   port?: number;
-  verbose?: boolean;
 }
+
+export interface JerryDebuggerDelegate {
+  onMessage: (data: ArrayBuffer) => void;
+};
 
 export const DEFAULT_DEBUGGER_HOST = 'localhost';
 export const DEFAULT_DEBUGGER_PORT = 5001;
@@ -28,17 +30,14 @@ export const DEFAULT_DEBUGGER_PORT = 5001;
 export class JerryDebuggerClient {
   readonly host: string;
   readonly port: number;
-  readonly verbose: boolean;
-  private protocolHandler: JerryDebugProtocolHandler;
   private socket?: WebSocket;
   private connectPromise?: Promise<void>;
-  private scripts: Array<JerryMessageScriptParsed> = [];
+  private delegate: JerryDebuggerDelegate;
 
   constructor(options: JerryDebuggerOptions) {
+    this.delegate = options.delegate;
     this.host = options.host || DEFAULT_DEBUGGER_HOST;
     this.port = options.port || DEFAULT_DEBUGGER_PORT;
-    this.verbose = options.verbose || false;
-    this.protocolHandler = new JerryDebugProtocolHandler(this);
   }
 
   connect(): Promise<void> {
@@ -76,18 +75,6 @@ export class JerryDebuggerClient {
   }
 
   onMessage(data: ArrayBuffer) {
-    this.protocolHandler.parseData(data);
-  }
-
-  onError(message: string) {
-    console.log('Error:', message);
-  }
-
-  onScriptParsed(message: JerryMessageScriptParsed) {
-    this.scripts.push(message);
-  }
-
-  getScripts() {
-    return this.scripts;
+    this.delegate.onMessage(data);
   }
 }

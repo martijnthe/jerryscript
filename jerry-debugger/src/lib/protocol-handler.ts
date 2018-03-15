@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import * as SP from './jrs-protocol-constants';
-import { ParsedFunction } from './breakpoint';
+import { Breakpoint, ParsedFunction } from './breakpoint';
 import { ByteConfig, cesu8ToString, concatUint8Arrays, decodeMessage } from './utils';
 
 // expected JerryScript debugger protocol version
@@ -36,12 +36,18 @@ export interface ParserStackFrame {
 export interface JerryDebugProtocolDelegate {
   onError?(message: string): void;
   onScriptParsed?(message: JerryMessageScriptParsed): void;
+  onBreakpointHit?(message: JerryMessageBreakpointHit): void;
 }
 
 export interface JerryMessageScriptParsed {
   id: number;
   name: string;
   lineCount: number;
+}
+
+export interface JerryMessageBreakpointHit {
+  breakpoint: Breakpoint;
+  exact: boolean;
 }
 
 interface ProtocolFunctionMap {
@@ -69,7 +75,11 @@ export class JerryDebugProtocolHandler {
   private sourceNameData?: Uint8Array;
   private functionName?: Uint8Array;
   private functions: FunctionMap = {};
+
   private lastScriptID: number = 0;
+  private exceptionData?: Uint8Array;
+  private lastBreakpointHit?: Breakpoint;
+  private lastBreakpointExact: boolean = true;
 
   constructor(delegate: JerryDebugProtocolDelegate) {
     this.delegate = delegate;
@@ -89,6 +99,7 @@ export class JerryDebugProtocolHandler {
       [SP.JERRY_DEBUGGER_SOURCE_CODE_END]: this.onSourceCode,
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME]: this.onSourceCodeName,
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END]: this.onSourceCodeName,
+      [SP.JERRY_DEBUGGER_BREAKPOINT_HIT]: this.onBreakpointHit,
     };
 
     this.stack = [{
@@ -105,6 +116,7 @@ export class JerryDebugProtocolHandler {
   // for the temporary mollification of lint
   unused() {
     this.maxMessageSize;
+    this.lastBreakpointExact;
   }
 
   decodeMessage(format: string, message: Uint8Array, offset: number) {
@@ -215,7 +227,72 @@ export class JerryDebugProtocolHandler {
     }
   }
 
-  parseData(data: ArrayBuffer) {
+  getBreakpoint(breakpointData: Array<number>) {
+    const func = this.functions[breakpointData[0]];
+    const offset = breakpointData[1];
+
+    if (offset in func.offsets) {
+      return {
+        breakpoint: func.offsets[offset],
+        exact: true,
+      }
+    }
+
+    if (offset < func.firstBreakpointOffset) {
+      return {
+        breakpoint: func.offsets[func.firstBreakpointOffset],
+        exact: true,
+      }
+    }
+
+    let nearestOffset = -1;
+    for (let currentOffset in func.offsets) {
+      const current = Number(currentOffset);
+      if ((current <= offset) && (current > nearestOffset)) {
+        nearestOffset = current;
+      }
+    }
+
+    return {
+      breakpoint: func.offsets[nearestOffset],
+      exact: false,
+    };
+  }
+
+  onBreakpointHit(data: Uint8Array) {
+    console.log('[Breakpoint Hit]');
+    const breakpointData = this.decodeMessage('CI', data, 1);
+    const breakpointRef = this.getBreakpoint(breakpointData);
+    const breakpoint = breakpointRef.breakpoint;
+
+    if (data[0] == SP.JERRY_DEBUGGER_EXCEPTION_HIT) {
+      console.log('Exception throw detected');
+      if (this.exceptionData) {
+        console.log('Exception hint:', cesu8ToString(this.exceptionData));
+        this.exceptionData = undefined;
+      }
+    }
+
+    this.lastBreakpointHit = breakpoint;
+    this.lastBreakpointExact = breakpointRef.exact;
+
+    let breakpointInfo = '';
+    if (breakpoint.activeIndex >= 0) {
+      breakpointInfo = ' breakpoint:' + breakpoint.activeIndex + ' ';
+    }
+
+    console.log('Stopped '
+                + (breakpointRef.exact ? 'at ': 'around ')
+                + breakpointInfo
+                + breakpoint);
+
+    // TODO: handle exception case differently
+    if (this.delegate.onBreakpointHit) {
+      this.delegate.onBreakpointHit(breakpointRef);
+    }
+  }
+
+  onMessage(data: ArrayBuffer) {
     if (data.byteLength < 1) {
       this.abort('message too short');
       return;
@@ -243,5 +320,9 @@ export class JerryDebugProtocolHandler {
       console.log('Abort:', message);
       this.delegate.onError(message);
     }
+  }
+
+  getLastBreakpoint() {
+    return this.lastBreakpointHit;
   }
 }

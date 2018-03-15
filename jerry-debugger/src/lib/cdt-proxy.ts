@@ -18,11 +18,17 @@ import * as rpc from 'noice-json-rpc';
 import Crdp from 'chrome-remote-debug-protocol';
 import * as http from 'http';
 import uuid from 'uuid/v1';
+
 import { onHttpRequest } from './cdt-proxy-http';
-import { JerryDebuggerClient } from './debugger-client';
+import { JerryMessageBreakpointHit, JerryMessageScriptParsed } from './protocol-handler';
+
+export interface CDTDelegate {
+  requestScripts: () => void;
+  requestBreakpoint: () => void;
+}
 
 export interface ChromeDevToolsProxyServerOptions {
-  debugger: JerryDebuggerClient;
+  delegate: CDTDelegate;
   port?: number;
   host?: string;
   uuid?: string;
@@ -41,11 +47,11 @@ export class ChromeDevToolsProxyServer {
   readonly jsfile: string;
   private asyncCallStackDepth: number = 0;  // 0 is unlimited
   private pauseOnExceptions: ('none' | 'uncaught' | 'all') = 'none';
-  private debugger: JerryDebuggerClient;
+  private delegate: CDTDelegate;
   private api: Crdp.CrdpServer;
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
-    this.debugger = options.debugger;
+    this.delegate = options.delegate;
 
     const server = http.createServer();
 
@@ -107,7 +113,10 @@ export class ChromeDevToolsProxyServer {
             name: 'jerryscript',
           },
         });
-        this.sendScripts();
+
+        // request controller to send scriptParsed command for existing scripts
+        this.delegate.requestScripts();
+        this.delegate.requestBreakpoint();
       },
       async runScript() {
         console.log('runScript called!');
@@ -122,23 +131,31 @@ export class ChromeDevToolsProxyServer {
     });
   }
 
-  /**
-   * sends Debugger.scriptParsed events for all scripts already known
+  scriptParsed(script: JerryMessageScriptParsed) {
+    this.api.Debugger.emitScriptParsed({
+      scriptId: String(script.id),
+      url: script.name,
+      startLine: 0,
+      startColumn: 0,
+      endLine: script.lineCount,
+      endColumn: 0,
+      executionContextId: 1,
+      hash: '',
+    });
+  }
+
+  /*
+   * sends Debugger.paused event for the current debugger location
    */
-  sendScripts() {
-    const scripts = this.debugger.getScripts();
-    for (let i = 0; i < scripts.length; i++) {
-      const script = scripts[i];
-      this.api.Debugger.emitScriptParsed({
-        scriptId: String(script.id),
-        url: script.name,
-        startLine: 0,
-        startColumn: 0,
-        endLine: script.lineCount,
-        endColumn: 0,
-        executionContextId: 1,
-        hash: '',
-      });
-    }
+  sendPaused(reason: 'exception' | 'other') {
+    this.api.Debugger.emitPaused({
+      hitBreakpoints: [],
+      reason,
+      callFrames: [],
+    });
+  }
+
+  breakpointHit(message: JerryMessageBreakpointHit) {
+
   }
 }

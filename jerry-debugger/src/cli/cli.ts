@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { CDTController } from '../lib/cdt-controller';
 import { ChromeDevToolsProxyServer } from '../lib/cdt-proxy';
 import { JerryDebuggerClient } from '../lib/debugger-client';
 import parseArgs from 'minimist';
+import { JerryDebugProtocolHandler } from '../lib/protocol-handler';
 
 /**
  * Converts string of format [host:][port] to an object with host and port,
@@ -60,15 +62,24 @@ export function getOptionsFromArgs(argv: Array<string>) {
 
 export function main(proc: NodeJS.Process) {
   const options = getOptionsFromArgs(proc.argv.slice(2));
-  const jdebug = new JerryDebuggerClient(options.remoteAddress);
+
+  const controller = new CDTController();
+  const jhandler = new JerryDebugProtocolHandler(controller);
+  const jdebug = new JerryDebuggerClient({
+    delegate: jhandler,
+    ...options.remoteAddress,
+  });
+  controller.setProtocolHandler(jhandler);
+
   const debuggerUrl = `ws://${jdebug.host}:${jdebug.port}`;
   jdebug.connect().then(() => {
     console.log(`Connected to debugger at ${debuggerUrl}`);
     const proxy = new ChromeDevToolsProxyServer({
+      delegate: controller,
       ...options.proxyAddress,
       jsfile: options.jsfile,
-      debugger: jdebug,
     });
+    controller.setProxyServer(proxy);
     console.log(`Proxy listening at ws://${proxy.host}:${proxy.port}`);
   }).catch((err) => {
     console.log(`Error connecting to debugger at ${debuggerUrl}`);
