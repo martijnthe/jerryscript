@@ -18,6 +18,41 @@ export interface BreakpointMap {
   [index: number]: Breakpoint;
 }
 
+export interface BreakpointOptions {
+  func: ParsedFunction;
+  line: number;
+  offset: number;
+  activeIndex?: number;
+}
+
+export class Breakpoint {
+  readonly line: number = 1;
+  readonly offset: any;
+  readonly func: ParsedFunction;
+  activeIndex: number = -1;
+
+  constructor(options: BreakpointOptions) {
+    this.func = options.func;
+    this.line = options.line;
+    this.offset = options.offset;
+    if (options.activeIndex !== undefined) {
+      this.activeIndex = options.activeIndex;
+    }
+  }
+
+  toString() {
+    let result = this.func.sourceName || '<unknown>';
+
+    result += ':' + this.line;
+
+    if (this.func.isFunc) {
+      result += ` (in ${this.func.name || 'function'}() at line:${this.func.line}, col:${this.func.column})`;
+    }
+
+    return result;
+  }
+}
+
 export class ParsedFunction {
   readonly isFunc: boolean;
   readonly byteCodeCP: number;
@@ -51,40 +86,5 @@ export class ParsedFunction {
       this.lines[breakpoint.line] = breakpoint;
       this.offsets[breakpoint.offset] = breakpoint;
     }
-  }
-}
-
-export interface BreakpointOptions {
-  func: ParsedFunction;
-  line: number;
-  offset: number;
-  activeIndex?: number;
-}
-
-export class Breakpoint {
-  readonly line: number = 1;
-  readonly offset: any;
-  readonly func: ParsedFunction;
-  activeIndex: number = -1;
-
-  constructor(options: BreakpointOptions) {
-    this.func = options.func;
-    this.line = options.line;
-    this.offset = options.offset;
-    if (options.activeIndex !== undefined) {
-      this.activeIndex = options.activeIndex;
-    }
-  }
-
-  toString() {
-    let result = this.func.sourceName || '<unknown>';
-
-    result += ':' + this.line;
-
-    if (this.func.isFunc) {
-      result += ` (in ${this.func.name || 'function'}() at line:${this.func.line}, col:${this.func.column})`;
-    }
-
-    return result;
   }
 }
