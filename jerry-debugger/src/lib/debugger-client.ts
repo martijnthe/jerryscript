@@ -15,35 +15,43 @@
 import WebSocket from 'ws';
 
 export interface JerryDebuggerOptions {
+  delegate: JerryDebuggerDelegate;
   host?: string;
   port?: number;
-  verbose?: boolean;
+}
+
+export interface JerryDebuggerDelegate {
+  onMessage: (message: Uint8Array) => void;
 }
 
 export const DEFAULT_DEBUGGER_HOST = 'localhost';
 export const DEFAULT_DEBUGGER_PORT = 5001;
 
-export class JerryDebugger {
+export class JerryDebuggerClient {
   readonly host: string;
   readonly port: number;
-  readonly verbose: boolean;
   private socket?: WebSocket;
+  private connectPromise?: Promise<void>;
+  private delegate: JerryDebuggerDelegate;
 
   constructor(options: JerryDebuggerOptions) {
+    this.delegate = options.delegate;
     this.host = options.host || DEFAULT_DEBUGGER_HOST;
     this.port = options.port || DEFAULT_DEBUGGER_PORT;
-    this.verbose = options.verbose || false;
   }
 
-  connect() {
-    if (this.socket) {
-      return Promise.resolve();
+  connect(): Promise<void> {
+    if (this.connectPromise) {
+      return this.connectPromise;
     }
+
     this.socket = new WebSocket(`ws://${this.host}:${this.port}/jerry-debugger`);
     this.socket.binaryType = 'arraybuffer';
-    return new Promise((resolve, reject) => {
+    this.socket.on('message', this.onMessage.bind(this));
+
+    this.connectPromise = new Promise((resolve, reject) => {
       if (!this.socket) {
-        reject();
+        reject(new Error('socket missing'));
         return;
       }
 
@@ -55,6 +63,8 @@ export class JerryDebugger {
         reject(err);
       });
     });
+
+    return this.connectPromise;
   }
 
   disconnect() {
@@ -62,5 +72,9 @@ export class JerryDebugger {
       this.socket.terminate();
       this.socket = undefined;
     }
+  }
+
+  onMessage(data: ArrayBuffer) {
+    this.delegate.onMessage(new Uint8Array(data));
   }
 }

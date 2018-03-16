@@ -18,9 +18,17 @@ import * as rpc from 'noice-json-rpc';
 import Crdp from 'chrome-remote-debug-protocol';
 import * as http from 'http';
 import uuid from 'uuid/v1';
+
 import { onHttpRequest } from './cdt-proxy-http';
+import { JerryMessageBreakpointHit, JerryMessageScriptParsed } from './protocol-handler';
+
+export interface CDTDelegate {
+  requestScripts: () => void;
+  requestBreakpoint: () => void;
+}
 
 export interface ChromeDevToolsProxyServerOptions {
+  delegate: CDTDelegate;
   port?: number;
   host?: string;
   uuid?: string;
@@ -39,8 +47,12 @@ export class ChromeDevToolsProxyServer {
   readonly jsfile: string;
   private asyncCallStackDepth: number = 0;  // 0 is unlimited
   private pauseOnExceptions: ('none' | 'uncaught' | 'all') = 'none';
+  private delegate: CDTDelegate;
+  private api: Crdp.CrdpServer;
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
+    this.delegate = options.delegate;
+
     const server = http.createServer();
 
     this.host = options.host || DEFAULT_SERVER_HOST;
@@ -58,7 +70,7 @@ export class ChromeDevToolsProxyServer {
 
     const wss = new WebSocketServer({ server });
     const rpcServer = new rpc.Server(wss);
-    const api: Crdp.CrdpServer = rpcServer.api();
+    this.api = rpcServer.api();
 
     wss.on('connection', function connection(ws, req) {
       const ip = req.connection.remoteAddress;
@@ -77,7 +89,7 @@ export class ChromeDevToolsProxyServer {
       console.log('Function not implemented');
     };
 
-    api.Debugger.expose({
+    this.api.Debugger.expose({
       enable: notImplemented,
       setBlackboxPatterns: notImplemented,
       setAsyncCallStackDepth: async (params) => {
@@ -87,10 +99,25 @@ export class ChromeDevToolsProxyServer {
         this.pauseOnExceptions = params.state;
       },
     });
-    api.Profiler.expose({ enable: notImplemented });
-    api.Runtime.expose({
+    this.api.Profiler.expose({ enable: notImplemented });
+    this.api.Runtime.expose({
       enable: notImplemented,
-      runIfWaitingForDebugger: notImplemented,
+      runIfWaitingForDebugger: async () => {
+        // how could i chain this to happen after the enable response goes out?
+        this.api.Runtime.emitExecutionContextCreated({
+          context: {
+            // might need to track multiple someday
+            id: 1,
+            origin: '',
+            // node seems to use node[<PID>] FWIW
+            name: 'jerryscript',
+          },
+        });
+
+        // request controller to send scriptParsed command for existing scripts
+        this.delegate.requestScripts();
+        this.delegate.requestBreakpoint();
+      },
       async runScript() {
         console.log('runScript called!');
         return {
@@ -102,5 +129,33 @@ export class ChromeDevToolsProxyServer {
         };
       },
     });
+  }
+
+  scriptParsed(script: JerryMessageScriptParsed) {
+    this.api.Debugger.emitScriptParsed({
+      scriptId: String(script.id),
+      url: script.name,
+      startLine: 0,
+      startColumn: 0,
+      endLine: script.lineCount,
+      endColumn: 0,
+      executionContextId: 1,
+      hash: '',
+    });
+  }
+
+  /*
+   * sends Debugger.paused event for the current debugger location
+   */
+  sendPaused(reason: 'exception' | 'other') {
+    this.api.Debugger.emitPaused({
+      hitBreakpoints: [],
+      reason,
+      callFrames: [],
+    });
+  }
+
+  breakpointHit(message: JerryMessageBreakpointHit) {
+    console.log('NOT YET IMPLEMENTED');
   }
 }

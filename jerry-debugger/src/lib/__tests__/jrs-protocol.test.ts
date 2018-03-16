@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { PROTOCOL } from '../jrs-protocol-constants';
+import * as SP from '../jrs-protocol-constants';
 
 describe('JerryScript protocol', () => {
   it('some silly test example', () => {
-    expect(PROTOCOL.SERVER.JERRY_DEBUGGER_BACKTRACE).not.toEqual(PROTOCOL.SERVER.JERRY_DEBUGGER_BACKTRACE_END);
+    expect(SP.JERRY_DEBUGGER_BACKTRACE).not.toEqual(SP.JERRY_DEBUGGER_BACKTRACE_END);
   });
 });
