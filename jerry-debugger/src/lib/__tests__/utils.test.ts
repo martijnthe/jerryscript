@@ -161,8 +161,17 @@ describe('cesu8ToString', () => {
     expect(cesu8ToString(highThreeByte)).toEqual(String.fromCharCode(0xffff));
   });
 
-  // TODO: test the part of CESU-8 incompatible with UTF-8; however, the existing
-  //   debugger client code didn't actually support this
+  it('decodes UTF-16 surrogate pairs', () => {
+    // 😂 is encoded as a 'surrogate pair': \ud83d\ude02 -- this is valid
+    // CESU-8 but invalid UTF-8 (a four-byte encoding should be used).
+    const surrogatePairBytes = Uint8Array.from([
+      // 0xd83d = 1101 100000 111101 = 0x0d, 0x20, 0x3d
+      0xe0 + 0x0d, 0x80 + 0x20, 0x80 + 0x3d,
+      // 0xde02 = 1101 111000 000010 = 0x0d, 0x38, 0x02
+      0xe0 + 0x0d, 0x80 + 0x38, 0x80 + 0x02,
+    ]);
+    expect(cesu8ToString(surrogatePairBytes)).toEqual('😂');
+  });
 });
 
 describe('assembleUint8Arrays', () => {
