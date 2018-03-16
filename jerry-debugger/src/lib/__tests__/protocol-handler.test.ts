@@ -31,10 +31,10 @@ describe('onConfiguration', () => {
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 
-  it('aborts when message too long', () => {
-    const array = Uint8Array.from([1, 2, 3, 4, 5, 6]);
+  it('allows otherwise valid message to be too long', () => {
+    const array = Uint8Array.from([0, 200, 4, 1, 1, 0]);
     handler.onConfiguration(array);
-    expect(delegate.onError).toHaveBeenCalledTimes(1);
+    expect(delegate.onError).toHaveBeenCalledTimes(0);
   });
 
   it('aborts when compressed pointer wrong size', () => {
@@ -95,22 +95,22 @@ describe('onMessage', () => {
   });
 
   it('aborts when message too short', () => {
-    handler.onMessage(new ArrayBuffer(0));
+    handler.onMessage(new Uint8Array(0));
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 
   it('aborts when first message is not configuration', () => {
     const array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_END, 1, 2, 3]);
-    handler.onMessage(array.buffer);
+    handler.onMessage(array);
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 
   it('aborts when unhandled message sent', () => {
     const array = Uint8Array.from([SP.JERRY_DEBUGGER_CONFIGURATION, 200, 4, 1, 1]);
-    handler.onMessage(array.buffer);
+    handler.onMessage(array);
     expect(delegate.onError).toHaveBeenCalledTimes(0);
     array[0] = 255;
-    handler.onMessage(array.buffer);
+    handler.onMessage(array);
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 });

@@ -92,7 +92,7 @@ export function decodeMessage(config: ByteConfig, format: string, message: Uint8
   return result;
 }
 
-export function cesu8ToString(array: Uint8Array | undefined): string {
+export function cesu8ToString(array: Uint8Array | undefined) {
   if (!array) {
     return '';
   }
@@ -124,7 +124,7 @@ export function cesu8ToString(array: Uint8Array | undefined): string {
 }
 
 // Concat the two arrays. The first byte (opcode) of nextArray is ignored.
-export function concatUint8Arrays(baseArray: Uint8Array | undefined, nextArray: Uint8Array) {
+export function assembleUint8Arrays(baseArray: Uint8Array | undefined, nextArray: Uint8Array) {
   if (!baseArray) {
     // Cut the first byte (opcode)
     return nextArray.slice(1);

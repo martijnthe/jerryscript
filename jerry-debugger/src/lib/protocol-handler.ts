@@ -14,10 +14,10 @@
 
 import * as SP from './jrs-protocol-constants';
 import { Breakpoint, ParsedFunction } from './breakpoint';
-import { ByteConfig, cesu8ToString, concatUint8Arrays, decodeMessage } from './utils';
+import { ByteConfig, cesu8ToString, assembleUint8Arrays, decodeMessage } from './utils';
 
-// expected JerryScript debugger protocol version
-const JERRY_DEBUGGER_VERSION = 1;
+export type CompressedPointer = number;
+export type ByteCodeOffset = number;
 
 export interface ParserStackFrame {
   isFunc: boolean;
@@ -27,14 +27,14 @@ export interface ParserStackFrame {
   source: string;
   sourceName?: string;
   lines: Array<number>;
-  offsets: Array<number>;
-  byteCodeCP?: number;
+  offsets: Array<ByteCodeOffset>;
+  byteCodeCP?: CompressedPointer;
   firstBreakpointLine?: number;
-  firstBreakpointOffset?: number;
+  firstBreakpointOffset?: ByteCodeOffset;
 }
 
 export interface JerryDebugProtocolDelegate {
-  onError?(message: string): void;
+  onError?(code: number, message: string): void;
   onScriptParsed?(message: JerryMessageScriptParsed): void;
   onBreakpointHit?(message: JerryMessageBreakpointHit): void;
 }
@@ -113,9 +113,9 @@ export class JerryDebugProtocolHandler {
     }];
   }
 
-  // for the temporary mollification of lint
+  // FIXME: this lets test suite run for now
   unused() {
-    this.maxMessageSize;
+    this.maxMessageSize,
     this.lastBreakpointExact;
   }
 
@@ -125,7 +125,7 @@ export class JerryDebugProtocolHandler {
 
   onConfiguration(data: Uint8Array) {
     console.log('[Configuration]');
-    if (data.length !== 5) {
+    if (data.length < 5) {
       this.abort('configuration message wrong size');
       return;
     }
@@ -139,9 +139,9 @@ export class JerryDebugProtocolHandler {
       this.abort('compressed pointer must be 2 or 4 bytes long');
     }
 
-    if (this.version !== JERRY_DEBUGGER_VERSION) {
+    if (this.version !== SP.JERRY_DEBUGGER_VERSION) {
       this.abort('incorrect target debugger version detected: ' + this.version
-                 + ' expected: ' + JERRY_DEBUGGER_VERSION);
+                 + ' expected: ' + SP.JERRY_DEBUGGER_VERSION);
     }
   }
 
@@ -190,23 +190,24 @@ export class JerryDebugProtocolHandler {
     }
 
     let array: Array<number>;
+    const stackFrame = this.stack[this.stack.length - 1];
     if (data[0] === SP.JERRY_DEBUGGER_BREAKPOINT_LIST) {
-      array = this.stack[this.stack.length - 1].lines;
+      array = stackFrame.lines;
     } else {
-      array = this.stack[this.stack.length - 1].offsets;
+      array = stackFrame.offsets;
     }
 
     for (let i = 1; i < data.byteLength; i += 4) {
       array.push(this.decodeMessage('I', data, i)[0]);
     }
-    return;
   }
 
   onSourceCode(data: Uint8Array) {
     console.log('[Source Code]');
-    this.sourceData = concatUint8Arrays(this.sourceData, data);
+    this.sourceData = assembleUint8Arrays(this.sourceData, data);
     if (data[0] === SP.JERRY_DEBUGGER_SOURCE_CODE_END) {
       this.source = cesu8ToString(this.sourceData);
+      this.sourceData = undefined;
       if (this.delegate.onScriptParsed) {
         this.delegate.onScriptParsed({
           'id': ++this.lastScriptID,
@@ -219,11 +220,12 @@ export class JerryDebugProtocolHandler {
 
   onSourceCodeName(data: Uint8Array) {
     console.log('[Source Code Name]');
-    this.sourceNameData = concatUint8Arrays(this.sourceNameData, data);
+    this.sourceNameData = assembleUint8Arrays(this.sourceNameData, data);
     if (data[0] === SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END) {
       this.sourceName = cesu8ToString(this.sourceNameData);
-      // assumption: this will be completed before source and included in the
-      //   onScriptParsed delegate function called in onSourceCode
+      this.sourceNameData = undefined;
+      // TODO: test that this is completed before source and included in the
+      //   onScriptParsed delegate function called in onSourceCode, or abort
     }
   }
 
@@ -235,14 +237,14 @@ export class JerryDebugProtocolHandler {
       return {
         breakpoint: func.offsets[offset],
         exact: true,
-      }
+      };
     }
 
     if (offset < func.firstBreakpointOffset) {
       return {
         breakpoint: func.offsets[func.firstBreakpointOffset],
         exact: true,
-      }
+      };
     }
 
     let nearestOffset = -1;
@@ -265,7 +267,7 @@ export class JerryDebugProtocolHandler {
     const breakpointRef = this.getBreakpoint(breakpointData);
     const breakpoint = breakpointRef.breakpoint;
 
-    if (data[0] == SP.JERRY_DEBUGGER_EXCEPTION_HIT) {
+    if (data[0] === SP.JERRY_DEBUGGER_EXCEPTION_HIT) {
       console.log('Exception throw detected');
       if (this.exceptionData) {
         console.log('Exception hint:', cesu8ToString(this.exceptionData));
@@ -278,13 +280,11 @@ export class JerryDebugProtocolHandler {
 
     let breakpointInfo = '';
     if (breakpoint.activeIndex >= 0) {
-      breakpointInfo = ' breakpoint:' + breakpoint.activeIndex + ' ';
+      breakpointInfo = 'breakpoint:' + breakpoint.activeIndex + ' ';
     }
 
-    console.log('Stopped '
-                + (breakpointRef.exact ? 'at ': 'around ')
-                + breakpointInfo
-                + breakpoint);
+    const atAround = breakpointRef.exact ? 'at' : 'around';
+    console.log(`Stopped ${atAround} ${breakpointInfo}${breakpoint}`);
 
     // TODO: handle exception case differently
     if (this.delegate.onBreakpointHit) {
@@ -292,13 +292,11 @@ export class JerryDebugProtocolHandler {
     }
   }
 
-  onMessage(data: ArrayBuffer) {
-    if (data.byteLength < 1) {
+  onMessage(message: Uint8Array) {
+    if (message.byteLength < 1) {
       this.abort('message too short');
       return;
     }
-
-    const message = new Uint8Array(data);
 
     if (this.byteConfig.cpointerSize === 0) {
       if (message[0] !== SP.JERRY_DEBUGGER_CONFIGURATION) {
@@ -315,14 +313,14 @@ export class JerryDebugProtocolHandler {
     }
   }
 
+  getLastBreakpoint() {
+    return this.lastBreakpointHit;
+  }
+
   private abort(message: string) {
     if (this.delegate.onError) {
       console.log('Abort:', message);
-      this.delegate.onError(message);
+      this.delegate.onError(0, message);
     }
-  }
-
-  getLastBreakpoint() {
-    return this.lastBreakpointHit;
   }
 }

@@ -156,6 +156,6 @@ export class ChromeDevToolsProxyServer {
   }
 
   breakpointHit(message: JerryMessageBreakpointHit) {
-
+    console.log('NOT YET IMPLEMENTED');
   }
 }

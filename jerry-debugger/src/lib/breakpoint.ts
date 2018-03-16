@@ -82,13 +82,7 @@ export class Breakpoint {
     result += ':' + this.line;
 
     if (this.func.isFunc) {
-      result += ' (in '
-                + (this.func.name || 'function')
-                + '() at line:'
-                + this.func.line
-                + ', col:'
-                + this.func.column
-                + ')';
+      result += ` (in ${this.func.name || 'function'}() at line:${this.func.line}, col:${this.func.column})`;
     }
 
     return result;

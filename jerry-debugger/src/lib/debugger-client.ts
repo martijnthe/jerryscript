@@ -21,8 +21,8 @@ export interface JerryDebuggerOptions {
 }
 
 export interface JerryDebuggerDelegate {
-  onMessage: (data: ArrayBuffer) => void;
-};
+  onMessage: (message: Uint8Array) => void;
+}
 
 export const DEFAULT_DEBUGGER_HOST = 'localhost';
 export const DEFAULT_DEBUGGER_PORT = 5001;
@@ -75,6 +75,6 @@ export class JerryDebuggerClient {
   }
 
   onMessage(data: ArrayBuffer) {
-    this.delegate.onMessage(data);
+    this.delegate.onMessage(new Uint8Array(data));
   }
 }

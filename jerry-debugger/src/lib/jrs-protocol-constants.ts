@@ -14,6 +14,9 @@
 
 // TODO: consider generating this file
 
+// expected JerryScript debugger protocol version
+export const JERRY_DEBUGGER_VERSION = 1;
+
 // server
 export const JERRY_DEBUGGER_CONFIGURATION = 1;
 export const JERRY_DEBUGGER_PARSE_ERROR = 2;
