@@ -13,9 +13,17 @@
 // limitations under the License.
 
 import { CDTController } from '../lib/cdt-controller';
-import { ChromeDevToolsProxyServer } from '../lib/cdt-proxy';
-import { JerryDebuggerClient } from '../lib/debugger-client';
-import parseArgs from 'minimist';
+import {
+  ChromeDevToolsProxyServer,
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+} from '../lib/cdt-proxy';
+import {
+  JerryDebuggerClient,
+  DEFAULT_DEBUGGER_HOST,
+  DEFAULT_DEBUGGER_PORT,
+} from '../lib/debugger-client';
+import { Command } from 'commander';
 import { JerryDebugProtocolHandler } from '../lib/protocol-handler';
 
 /**
@@ -34,34 +42,32 @@ function getHostAndPort(input: string) {
 }
 
 export function getOptionsFromArgs(argv: Array<string>) {
-  const args = parseArgs(argv, {
-    default: {
-      'verbose': false,
-      'inspect-brk': '',
-      'jerry-remote': '',
-    },
-    alias: {
-      'verbose': 'v',
-    },
-    boolean: [
-      'verbose',
-    ],
-    string: [
-      'inspect-brk',
-      'jerry-remote',
-    ],
-  });
+  const program = new Command('jerry-debugger');
+  program
+    .usage('[options] <script.js ...>')
+    .option(
+      '-v, --verbose',
+      'Enable verbose logging', false)
+    .option(
+      '--inspect-brk [[host:]port]',
+      'Activate Chrome DevTools proxy on host:port',
+      `${DEFAULT_SERVER_HOST}:${DEFAULT_SERVER_PORT}`)
+    .option(
+      '--jerry-remote [[host:]port]',
+      'Connect to JerryScript on host:port',
+      `${DEFAULT_DEBUGGER_HOST}:${DEFAULT_DEBUGGER_PORT}`)
+    .parse(argv);
 
   return {
-    proxyAddress: getHostAndPort(args['inspect-brk']),
-    remoteAddress: getHostAndPort(args['jerry-remote']),
-    jsfile: args._[0] || 'untitled.js',
-    verbose: args['verbose'],
+    proxyAddress: getHostAndPort(program.inspectBrk),
+    remoteAddress: getHostAndPort(program.jerryRemote),
+    jsfile: program.args[0] || 'untitled.js',
+    verbose: program.verbose || false,
   };
 }
 
 export function main(proc: NodeJS.Process) {
-  const options = getOptionsFromArgs(proc.argv.slice(2));
+  const options = getOptionsFromArgs(proc.argv);
 
   const controller = new CDTController();
   const jhandler = new JerryDebugProtocolHandler(controller);

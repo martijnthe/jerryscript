@@ -13,79 +13,91 @@
 // limitations under the License.
 
 import { getOptionsFromArgs } from '../cli';
+import {
+  DEFAULT_DEBUGGER_HOST,
+  DEFAULT_DEBUGGER_PORT,
+} from '../../lib/debugger-client';
+import {
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+} from '../../lib/cdt-proxy';
 
 describe('getOptionsFromArgs', () => {
 
+  function getOptionsFromUserArgs(userArgs: string[]) {
+    return getOptionsFromArgs(['node', 'jerry-debugger.js'].concat(userArgs));
+  }
+
   it('works without --inspect-brk', () => {
-    const opt = getOptionsFromArgs([]);
-    expect(opt.proxyAddress.host).toEqual(undefined);
-    expect(opt.proxyAddress.port).toEqual(undefined);
+    const opt = getOptionsFromUserArgs([]);
+    expect(opt.proxyAddress.host).toEqual(DEFAULT_SERVER_HOST);
+    expect(opt.proxyAddress.port).toEqual(DEFAULT_SERVER_PORT);
   });
 
   it('parses --inspect-brk with port only', () => {
-    const opt = getOptionsFromArgs(['--inspect-brk=1234']);
+    const opt = getOptionsFromUserArgs(['--inspect-brk=1234']);
     expect(opt.proxyAddress.host).toEqual(undefined);
     expect(opt.proxyAddress.port).toEqual(1234);
   });
 
   it('parses --inspect-brk with no port', () => {
-    const opt = getOptionsFromArgs(['--inspect-brk=10.10.10.10:']);
+    const opt = getOptionsFromUserArgs(['--inspect-brk=10.10.10.10:']);
     expect(opt.proxyAddress.host).toEqual('10.10.10.10');
     expect(opt.proxyAddress.port).toEqual(undefined);
   });
 
   it('parses --inspect-brk with no host', () => {
-    const opt = getOptionsFromArgs(['--inspect-brk=:1234']);
+    const opt = getOptionsFromUserArgs(['--inspect-brk=:1234']);
     expect(opt.proxyAddress.host).toEqual(undefined);
     expect(opt.proxyAddress.port).toEqual(1234);
   });
 
   it('parses --inspect-brk with host and port', () => {
-    const opt = getOptionsFromArgs(['--inspect-brk=10.10.10.10:1234']);
+    const opt = getOptionsFromUserArgs(['--inspect-brk=10.10.10.10:1234']);
     expect(opt.proxyAddress.host).toEqual('10.10.10.10');
     expect(opt.proxyAddress.port).toEqual(1234);
   });
 
   it('works without --jerry-remote', () => {
-    const opt = getOptionsFromArgs([]);
-    expect(opt.remoteAddress.host).toEqual(undefined);
-    expect(opt.remoteAddress.port).toEqual(undefined);
+    const opt = getOptionsFromUserArgs([]);
+    expect(opt.remoteAddress.host).toEqual(DEFAULT_DEBUGGER_HOST);
+    expect(opt.remoteAddress.port).toEqual(DEFAULT_DEBUGGER_PORT);
   });
 
   it('parses --jerry-remote with port only', () => {
-    const opt = getOptionsFromArgs(['--jerry-remote=1234']);
+    const opt = getOptionsFromUserArgs(['--jerry-remote=1234']);
     expect(opt.remoteAddress.host).toEqual(undefined);
     expect(opt.remoteAddress.port).toEqual(1234);
   });
 
   it('parses --jerry-remote with host and port', () => {
-    const opt = getOptionsFromArgs(['--jerry-remote=10.10.10.10:1234']);
+    const opt = getOptionsFromUserArgs(['--jerry-remote=10.10.10.10:1234']);
     expect(opt.remoteAddress.host).toEqual('10.10.10.10');
     expect(opt.remoteAddress.port).toEqual(1234);
   });
 
   it('verbose defaults to false', () => {
-    const opt = getOptionsFromArgs([]);
+    const opt = getOptionsFromUserArgs([]);
     expect(opt.verbose).toEqual(false);
   });
 
   it('parses verbose flag', () => {
-    const opt = getOptionsFromArgs(['--verbose']);
+    const opt = getOptionsFromUserArgs(['--verbose']);
     expect(opt.verbose).toEqual(true);
   });
 
   it('parses v alias for verbose', () => {
-    const opt = getOptionsFromArgs(['-v']);
+    const opt = getOptionsFromUserArgs(['-v']);
     expect(opt.verbose).toEqual(true);
   });
 
   it('jsfile defaults to untitled.js', () => {
-    const opt = getOptionsFromArgs([]);
+    const opt = getOptionsFromUserArgs([]);
     expect(opt.jsfile).toEqual('untitled.js');
   });
 
   it('returns client source as jsfile', () => {
-    const opt = getOptionsFromArgs(['foo/bar.js']);
+    const opt = getOptionsFromUserArgs(['foo/bar.js']);
     expect(opt.jsfile).toEqual('foo/bar.js');
   });
 
