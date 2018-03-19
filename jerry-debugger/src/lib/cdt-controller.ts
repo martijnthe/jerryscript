@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import Crdp from 'chrome-remote-debug-protocol';
+
 import { Breakpoint } from './breakpoint';
 import { JerryDebugProtocolHandler, JerryMessageScriptParsed, JerryMessageBreakpointHit } from './protocol-handler';
 import { ChromeDevToolsProxyServer } from './cdt-proxy';
@@ -71,8 +73,21 @@ export class CDTController {
     if (!this.protocolHandler || !this.proxyServer) {
       throw new Error('missing object dependencies');
     }
-    this.protocolHandler.getLastBreakpoint();
+    const breakpoint = this.protocolHandler.getLastBreakpoint();
+    if (!breakpoint) {
+      throw new Error('no last breakpoint found');
+    }
+
     // Node uses 'Break on start' but this is not allowable in crdp.d.ts
-    this.proxyServer.sendPaused('other');
+    this.proxyServer.sendPaused(breakpoint, 'other');
+  }
+
+  getScriptSource(request: Crdp.Debugger.GetScriptSourceRequest) {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    return Promise.resolve({
+      scriptSource: this.protocolHandler.getSource(),
+    });
   }
 }

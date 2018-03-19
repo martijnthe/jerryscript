@@ -19,12 +19,14 @@ import Crdp from 'chrome-remote-debug-protocol';
 import * as http from 'http';
 import uuid from 'uuid/v1';
 
+import { Breakpoint } from './breakpoint';
 import { onHttpRequest } from './cdt-proxy-http';
 import { JerryMessageBreakpointHit, JerryMessageScriptParsed } from './protocol-handler';
 
 export interface CDTDelegate {
   requestScripts: () => void;
   requestBreakpoint: () => void;
+  getScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) => Promise<Crdp.Debugger.GetScriptSourceResponse>;
 }
 
 export interface ChromeDevToolsProxyServerOptions {
@@ -92,11 +94,12 @@ export class ChromeDevToolsProxyServer {
     this.api.Debugger.expose({
       enable: notImplemented,
       setBlackboxPatterns: notImplemented,
-      setAsyncCallStackDepth: async (params) => {
-        this.asyncCallStackDepth = params.maxDepth;
-      },
+      getScriptSource: request => this.delegate.getScriptSource(request),
       setPauseOnExceptions: async (params) => {
         this.pauseOnExceptions = params.state;
+      },
+      setAsyncCallStackDepth: async (params) => {
+        this.asyncCallStackDepth = params.maxDepth;
       },
     });
     this.api.Profiler.expose({ enable: notImplemented });
@@ -147,11 +150,23 @@ export class ChromeDevToolsProxyServer {
   /*
    * sends Debugger.paused event for the current debugger location
    */
-  sendPaused(reason: 'exception' | 'other') {
+  sendPaused(breakpoint: Breakpoint, reason: 'exception' | 'other') {
+    const callFrame: Crdp.Debugger.CallFrame = {
+      callFrameId: '0',  // FIXME
+      functionName: '',  // FIXME
+      location: {
+        scriptId: '1',  // TODO: will we always have just one script?
+        lineNumber: breakpoint.line - 1,  // switch to 0-based
+      },
+      scopeChain: [],
+      this: {
+        type: 'object',
+      },
+    };
     this.api.Debugger.emitPaused({
       hitBreakpoints: [],
       reason,
-      callFrames: [],
+      callFrames: [callFrame],
     });
   }
 

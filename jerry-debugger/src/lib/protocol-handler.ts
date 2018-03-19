@@ -100,6 +100,8 @@ export class JerryDebugProtocolHandler {
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME]: this.onSourceCodeName,
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END]: this.onSourceCodeName,
       [SP.JERRY_DEBUGGER_BREAKPOINT_HIT]: this.onBreakpointHit,
+      [SP.JERRY_DEBUGGER_BACKTRACE]: this.onBacktrace,
+      [SP.JERRY_DEBUGGER_BACKTRACE_END]: this.onBacktrace,
     };
 
     this.stack = [{
@@ -117,6 +119,10 @@ export class JerryDebugProtocolHandler {
   unused() {
     this.maxMessageSize,
     this.lastBreakpointExact;
+  }
+
+  getSource() {
+    return this.source;
   }
 
   decodeMessage(format: string, message: Uint8Array, offset: number) {
@@ -290,6 +296,10 @@ export class JerryDebugProtocolHandler {
     if (this.delegate.onBreakpointHit) {
       this.delegate.onBreakpointHit(breakpointRef);
     }
+  }
+
+  onBacktrace(message: Uint8Array) {
+    console.log('got backtrace', message);
   }
 
   onMessage(message: Uint8Array) {
