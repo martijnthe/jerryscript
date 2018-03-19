@@ -43,6 +43,61 @@ export function getFormatSize(config: ByteConfig, format: string) {
   return length;
 }
 
+/**
+ * Returns a 32-bit integer read from array at offset, in either direction
+ *
+ * @param littleEndian Byte order to use
+ * @param array        Array with length >= offset + 3
+ * @param offset       Offset at which to start reading
+ */
+export function getUint32(littleEndian: boolean, array: Uint8Array, offset: number) {
+  let value = 0;
+  if (littleEndian) {
+    value = array[offset];
+    value |= array[offset + 1] << 8;
+    value |= array[offset + 2] << 16;
+    value |= array[offset + 3] << 24;
+  } else {
+    value = array[offset] << 24;
+    value |= array[offset + 1] << 16;
+    value |= array[offset + 2] << 8;
+    value |= array[offset + 3];
+  }
+  return value >>> 0;
+}
+
+/**
+ * Writes a 32-bit integer to array at offset, in either direction
+ *
+ * @param littleEndian Byte order to use
+ * @param array        Array with length >= offset + 3
+ * @param offset       Offset at which to start writing
+ * @param value        Value to write in 32-bit integer range
+ */
+export function setUint32(littleEndian: boolean, array: Uint8Array, offset: number, value: number) {
+  if (littleEndian) {
+    array[offset] = value & 0xff;
+    array[offset + 1] = (value >> 8) & 0xff;
+    array[offset + 2] = (value >> 16) & 0xff;
+    array[offset + 3] = (value >> 24) & 0xff;
+  } else {
+    array[offset] = (value >> 24) & 0xff;
+    array[offset + 1] = (value >> 16) & 0xff;
+    array[offset + 2] = (value >> 8) & 0xff;
+    array[offset + 3] = value & 0xff;
+  }
+}
+
+/**
+ * Parses values out of message array matching format
+ *
+ * Throws if message not big enough for specified format or bogus format character
+ *
+ * @param config  Byte order / size info
+ * @param format  String of 'B', 'C', and 'I' characters
+ * @param message Array containing message
+ * @param offset  Optional offset at which to start reading
+ */
 export function decodeMessage(config: ByteConfig, format: string, message: Uint8Array, offset = 0) {
   // Format: B=byte I=int32 C=cpointer
   // Returns an array of decoded numbers
@@ -56,8 +111,7 @@ export function decodeMessage(config: ByteConfig, format: string, message: Uint8
 
   for (let i = 0; i < format.length; i++) {
     if (format[i] === 'B') {
-      result.push(message[offset]);
-      offset++;
+      result.push(message[offset++]);
       continue;
     }
 
@@ -77,19 +131,73 @@ export function decodeMessage(config: ByteConfig, format: string, message: Uint8
       throw new Error('unexpected decode request');
     }
 
-    if (config.littleEndian) {
-      value = (message[offset] | (message[offset + 1] << 8)
-               | (message[offset + 2] << 16) | (message[offset + 3] << 24));
-    } else {
-      value = ((message[offset] << 24) | (message[offset + 1] << 16)
-               | (message[offset + 2] << 8) | message[offset + 3]);
-    }
-
+    value = getUint32(config.littleEndian, message, offset);
     result.push(value);
     offset += 4;
   }
 
   return result;
+}
+
+/**
+ * Packs values into new array according to format
+ *
+ * Throws if not enough values supplied or values exceed expected integer ranges
+ *
+ * @param config Byte order / size info
+ * @param format String of 'B', 'C', and 'I' characters
+ * @param values Array of values to format into message
+ */
+export function encodeMessage(config: ByteConfig, format: string, values: Array<number>) {
+  const length = getFormatSize(config, format);
+  const message = new Uint8Array(length);
+  let offset = 0;
+
+  if (values.length < format.length) {
+    throw new Error('not enough values supplied');
+  }
+
+  for (let i = 0; i < format.length; i++) {
+    const value = values[i];
+
+    if (format[i] === 'B') {
+      if ((value & 0xff) !== value) {
+        throw new Error('expected byte value');
+      }
+      message[offset++] = value;
+      continue;
+    }
+
+    if (format[i] === 'C' && config.cpointerSize === 2) {
+      if ((value & 0xffff) !== value) {
+        throw new Error('expected two-byte value');
+      }
+      const lowByte = value & 0xff;
+      const highByte = (value >> 8) & 0xff;
+
+      if (config.littleEndian) {
+        message[offset++] = lowByte;
+        message[offset++] = highByte;
+      } else {
+        message[offset++] = highByte;
+        message[offset++] = lowByte;
+      }
+      continue;
+    }
+
+    if (format[i] !== 'I' && (format[i] !== 'C' || config.cpointerSize !== 4)) {
+      throw new Error('unexpected encode request');
+    }
+
+    if ((value & 0xffffffff) !== value) {
+      throw new Error('expected four-byte value');
+    }
+
+    setUint32(config.littleEndian, message, offset, value);
+    offset += 4;
+  }
+
+  return message;
 }
 
 export function cesu8ToString(array: Uint8Array | undefined) {

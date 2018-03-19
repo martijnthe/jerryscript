@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { getFormatSize, decodeMessage, cesu8ToString, assembleUint8Arrays } from '../utils';
+import { getFormatSize, getUint32, setUint32, decodeMessage, encodeMessage,
+  cesu8ToString, assembleUint8Arrays } from '../utils';
 
 const defConfig = {
   cpointerSize: 2,
@@ -56,6 +57,43 @@ describe('getFormatSize', () => {
 
   it('returns sum for longer format', () => {
     expect(getFormatSize(altConfig, 'BCIIIBBCC')).toEqual(27);
+  });
+});
+
+describe('getUint32', () => {
+  it('reads little endian values', () => {
+    const array = Uint8Array.from([0xef, 0xbe, 0xad, 0xde]);
+    expect(getUint32(true, array, 0)).toEqual(0xdeadbeef);
+  });
+
+  it('reads big endian values', () => {
+    const array = Uint8Array.from([0xde, 0xad, 0xbe, 0xef]);
+    expect(getUint32(false, array, 0)).toEqual(0xdeadbeef);
+  });
+
+  it('reads at an offset', () => {
+    const array = Uint8Array.from([0x00, 0x00, 0xde, 0xad, 0xbe, 0xef]);
+    expect(getUint32(false, array, 2)).toEqual(0xdeadbeef);
+  });
+});
+
+describe('setUint32', () => {
+  it('writes little endian values', () => {
+    const array = new Uint8Array(4);
+    setUint32(true, array, 0, 0xdeadbeef);
+    expect(array).toEqual(Uint8Array.from([0xef, 0xbe, 0xad, 0xde]));
+  });
+
+  it('writes big endian values', () => {
+    const array = new Uint8Array(4);
+    setUint32(false, array, 0, 0xdeadbeef);
+    expect(array).toEqual(Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
+  });
+
+  it('writes at an offset', () => {
+    const array = new Uint8Array(6);
+    setUint32(false, array, 2, 0xdeadbeef);
+    expect(array).toEqual(Uint8Array.from([0x00, 0x00, 0xde, 0xad, 0xbe, 0xef]));
   });
 });
 
@@ -125,6 +163,102 @@ describe('decodeMessage', () => {
         cpointerSize: 6,
         littleEndian: true,
       }, 'C', array);
+    }).toThrow();
+  });
+});
+
+describe('encodeMessage', () => {
+  it('throws if value list too short', () => {
+    expect(() => {
+      encodeMessage(defConfig, 'BI', [42]);
+    }).toThrow();
+  });
+
+  it('throws on unexpected format character', () => {
+    expect(() => {
+      encodeMessage(defConfig, 'Q', [42]);
+    }).toThrow();
+  });
+
+  it('encodes a byte with B character', () => {
+    const array = encodeMessage(defConfig, 'B', [42]);
+    expect(array).toEqual(Uint8Array.from([42]));
+  });
+
+  it('throws on byte outside range', () => {
+    expect(() => {
+      encodeMessage(defConfig, 'B', [-1]);
+    }).toThrow();
+    expect(() => {
+      encodeMessage(defConfig, 'B', [0x100]);
+    }).toThrow();
+  });
+
+  it('encodes two bytes for C with default config', () => {
+    const array = encodeMessage(defConfig, 'C', [1 + (2 << 8)]);
+    expect(array).toEqual(Uint8Array.from([1, 2]));
+  });
+
+  it('encodes two bytes for C with big endian', () => {
+    const array = encodeMessage({
+      cpointerSize: 2,
+      littleEndian: false,
+    }, 'C', [(1 << 8) + 2]);
+    expect(array).toEqual(Uint8Array.from([1, 2]));
+  });
+
+  it('throws on two bytes outside range', () => {
+    expect(() => {
+      encodeMessage(defConfig, 'C', [-1]);
+    }).toThrow();
+    expect(() => {
+      encodeMessage(defConfig, 'C', [0x10000]);
+    }).toThrow();
+  });
+
+  it('encodes four bytes for C with default config', () => {
+    const array = encodeMessage(altConfig, 'C', [1 + (2 << 8) + (3 << 16) + (4 << 24)]);
+    expect(array).toEqual(Uint8Array.from([1, 2, 3, 4]));
+  });
+
+  it('encodes four bytes for C with big endian', () => {
+    const array = encodeMessage({
+      cpointerSize: 4,
+      littleEndian: false,
+    }, 'C', [(1 << 24) + (2 << 16) + (3 << 8) + 4]);
+    expect(array).toEqual(Uint8Array.from([1, 2, 3, 4]));
+  });
+
+  it('throws on float', () => {
+    expect(() => {
+      encodeMessage(defConfig, 'I', [4.2]);
+    }).toThrow();
+  });
+
+  it('handles multiple format characters', () => {
+    const array = encodeMessage(defConfig, 'IBC', [
+      1 + (2 << 8) + (3 << 16) + (4 << 24),
+      5,
+      6 + (7 << 8),
+    ]);
+    expect(array).toEqual(Uint8Array.from([1, 2, 3, 4, 5, 6, 7]));
+  });
+
+  it('throws on byte outside range', () => {
+    expect(() => {
+      encodeMessage({
+        cpointerSize: 6,
+        littleEndian: true,
+      }, 'C', [42]);
+    }).toThrow();
+  });
+
+  it('throws on unexpected pointer size', () => {
+    expect(() => {
+      encodeMessage({
+        cpointerSize: 6,
+        littleEndian: true,
+      }, 'C', [42]);
     }).toThrow();
   });
 });
