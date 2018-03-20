@@ -76,7 +76,8 @@ export class JerryDebugProtocolHandler {
   private sourceData?: Uint8Array;
   private sourceName?: string;
   private sourceNameData?: Uint8Array;
-  private functionName?: Uint8Array;
+  private functionName?: string;
+  private functionNameData?: Uint8Array;
   private functions: FunctionMap = {};
 
   private lastScriptID: number = 0;
@@ -102,6 +103,9 @@ export class JerryDebugProtocolHandler {
       [SP.JERRY_DEBUGGER_SOURCE_CODE_END]: this.onSourceCode,
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME]: this.onSourceCodeName,
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END]: this.onSourceCodeName,
+      [SP.JERRY_DEBUGGER_FUNCTION_NAME]: this.onFunctionName,
+      [SP.JERRY_DEBUGGER_FUNCTION_NAME_END]: this.onFunctionName,
+      [SP.JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP]: this.onReleaseByteCodeCP,
       [SP.JERRY_DEBUGGER_BREAKPOINT_HIT]: this.onBreakpointHit,
       [SP.JERRY_DEBUGGER_BACKTRACE]: this.onBacktrace,
       [SP.JERRY_DEBUGGER_BACKTRACE_END]: this.onBacktrace,
@@ -210,7 +214,7 @@ export class JerryDebugProtocolHandler {
       isFunc: true,
       line: position[0],
       column: position[1],
-      name: cesu8ToString(this.functionName),
+      name: this.functionName || '',
       source: this.source,
       sourceName: this.sourceName,
       lines: [],
@@ -265,6 +269,22 @@ export class JerryDebugProtocolHandler {
       // TODO: test that this is completed before source and included in the
       //   onScriptParsed delegate function called in onSourceCode, or abort
     }
+  }
+
+  onFunctionName(data: Uint8Array) {
+    console.log('[Function Name]', data);
+    this.functionNameData = assembleUint8Arrays(this.functionNameData, data);
+    if (data[0] === SP.JERRY_DEBUGGER_FUNCTION_NAME_END) {
+      this.functionName = cesu8ToString(this.functionNameData);
+      console.log('Name = ' + this.functionName);
+      this.functionNameData = undefined;
+    }
+  }
+
+  onReleaseByteCodeCP(data: Uint8Array) {
+    console.log('[Release Byte Code CP]');
+    const byteCodeCP = this.decodeMessage('C', data, 1)[0];
+    console.log('BYTE CODE CP:', byteCodeCP);
   }
 
   getBreakpoint(breakpointData: Array<number>) {
