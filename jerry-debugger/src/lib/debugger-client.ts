@@ -77,4 +77,10 @@ export class JerryDebuggerClient {
   onMessage(data: ArrayBuffer) {
     this.delegate.onMessage(new Uint8Array(data));
   }
+
+  send(data: ArrayBuffer) {
+    if (this.socket) {
+      this.socket.send(data);
+    }
+  }
 }

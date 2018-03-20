@@ -54,8 +54,9 @@ export class CDTController {
   }
 
   onBreakpointHit(message: JerryMessageBreakpointHit) {
+    console.log('onBreakpointHit');
     if (this.proxyServer) {
-      this.proxyServer.breakpointHit(message);
+      this.sendPaused(message.breakpoint);
     }
   }
 
@@ -69,17 +70,60 @@ export class CDTController {
     }
   }
 
-  requestBreakpoint() {
+  sendPaused(breakpoint: Breakpoint) {
     if (!this.protocolHandler || !this.proxyServer) {
       throw new Error('missing object dependencies');
+    }
+
+    // Node uses 'Break on start' but this is not allowable in crdp.d.ts
+    this.proxyServer.sendPaused(breakpoint, 'other');
+  }
+
+  requestBreakpoint() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
     }
     const breakpoint = this.protocolHandler.getLastBreakpoint();
     if (!breakpoint) {
       throw new Error('no last breakpoint found');
     }
 
-    // Node uses 'Break on start' but this is not allowable in crdp.d.ts
-    this.proxyServer.sendPaused(breakpoint, 'other');
+    this.sendPaused(breakpoint);
+  }
+
+  requestStepOver() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.stepOver();
+  }
+
+  requestStepInto() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.stepInto();
+  }
+
+  requestStepOut() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.stepOut();
+  }
+
+  requestPause() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.pause();
+  }
+
+  requestResume() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.resume();
   }
 
   getScriptSource(request: Crdp.Debugger.GetScriptSourceRequest) {

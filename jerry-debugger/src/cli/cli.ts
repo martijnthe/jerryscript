@@ -75,6 +75,7 @@ export function main(proc: NodeJS.Process) {
     delegate: jhandler,
     ...options.remoteAddress,
   });
+  jhandler.setDebugger(jdebug);
   controller.setProtocolHandler(jhandler);
 
   const debuggerUrl = `ws://${jdebug.host}:${jdebug.port}`;

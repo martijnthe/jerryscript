@@ -14,7 +14,8 @@
 
 import * as SP from './jrs-protocol-constants';
 import { Breakpoint, ParsedFunction } from './breakpoint';
-import { ByteConfig, cesu8ToString, assembleUint8Arrays, decodeMessage } from './utils';
+import { ByteConfig, cesu8ToString, assembleUint8Arrays, decodeMessage, encodeMessage } from './utils';
+import { JerryDebuggerClient } from './debugger-client';
 
 export type CompressedPointer = number;
 export type ByteCodeOffset = number;
@@ -60,7 +61,8 @@ interface FunctionMap {
 
 // abstracts away the details of the protocol
 export class JerryDebugProtocolHandler {
-  public delegate: JerryDebugProtocolDelegate;
+  private delegate: JerryDebugProtocolDelegate;
+  private debugger?: JerryDebuggerClient;
 
   // debugger configuration
   private maxMessageSize: number = 0;
@@ -119,6 +121,36 @@ export class JerryDebugProtocolHandler {
   unused() {
     this.maxMessageSize,
     this.lastBreakpointExact;
+  }
+
+  setDebugger(debuggerClient: JerryDebuggerClient) {
+    this.debugger = debuggerClient;
+  }
+
+  stepOver() {
+    this.resumeExec(SP.JERRY_DEBUGGER_NEXT);
+  }
+
+  stepInto() {
+    this.resumeExec(SP.JERRY_DEBUGGER_STEP);
+  }
+
+  stepOut() {
+    console.log('step out not yet supported in JerryScript');
+  }
+
+  pause() {
+    if (!this.debugger) {
+      throw new Error('no debugger found');
+    }
+    if (this.lastBreakpointHit) {
+      throw new Error('attempted pause while at breakpoint');
+    }
+    this.debugger.send(encodeMessage(this.byteConfig, 'B', [SP.JERRY_DEBUGGER_STOP]));
+  }
+
+  resume() {
+    this.resumeExec(SP.JERRY_DEBUGGER_CONTINUE);
   }
 
   getSource() {
@@ -332,5 +364,15 @@ export class JerryDebugProtocolHandler {
       console.log('Abort:', message);
       this.delegate.onError(0, message);
     }
+  }
+
+  private resumeExec(code: number) {
+    if (!this.debugger) {
+      throw new Error('no debugger found');
+    }
+    if (!this.lastBreakpointHit) {
+      throw new Error('attempted resume while not at breakpoint');
+    }
+    this.debugger.send(encodeMessage(this.byteConfig, 'B', [code]));
   }
 }

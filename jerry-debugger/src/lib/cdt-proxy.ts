@@ -21,11 +21,16 @@ import uuid from 'uuid/v1';
 
 import { Breakpoint } from './breakpoint';
 import { onHttpRequest } from './cdt-proxy-http';
-import { JerryMessageBreakpointHit, JerryMessageScriptParsed } from './protocol-handler';
+import { JerryMessageScriptParsed } from './protocol-handler';
 
 export interface CDTDelegate {
   requestScripts: () => void;
   requestBreakpoint: () => void;
+  requestStepOver: () => void;
+  requestStepInto: () => void;
+  requestStepOut: () => void;
+  requestPause: () => void;
+  requestResume: () => void;
   getScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) => Promise<Crdp.Debugger.GetScriptSourceResponse>;
 }
 
@@ -94,6 +99,11 @@ export class ChromeDevToolsProxyServer {
     this.api.Debugger.expose({
       enable: notImplemented,
       setBlackboxPatterns: notImplemented,
+      stepOver: async () => this.delegate.requestStepOver(),
+      stepInto: async () => this.delegate.requestStepInto(),
+      stepOut: async () => this.delegate.requestStepOut(),
+      pause: async () => this.delegate.requestPause(),
+      resume: async () => this.delegate.requestResume(),
       getScriptSource: request => this.delegate.getScriptSource(request),
       setPauseOnExceptions: async (params) => {
         this.pauseOnExceptions = params.state;
@@ -168,9 +178,5 @@ export class ChromeDevToolsProxyServer {
       reason,
       callFrames: [callFrame],
     });
-  }
-
-  breakpointHit(message: JerryMessageBreakpointHit) {
-    console.log('NOT YET IMPLEMENTED');
   }
 }
