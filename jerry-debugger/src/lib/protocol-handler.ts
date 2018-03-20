@@ -70,7 +70,7 @@ export class JerryDebugProtocolHandler {
   private version: number = 0;
   private functionMap: ProtocolFunctionMap;
 
-  private stack: Array<ParserStackFrame>;
+  private stack: Array<ParserStackFrame> = [];
   private sources: Array<string> = [''];
   private source: string = '';
   private sourceData?: Uint8Array;
@@ -110,16 +110,6 @@ export class JerryDebugProtocolHandler {
       [SP.JERRY_DEBUGGER_BACKTRACE]: this.onBacktrace,
       [SP.JERRY_DEBUGGER_BACKTRACE_END]: this.onBacktrace,
     };
-
-    this.stack = [{
-      isFunc: false,
-      line: 1,
-      column: 1,
-      name: '',
-      source: '',
-      lines: [],
-      offsets: [],
-    }];
   }
 
   // FIXME: this lets test suite run for now
@@ -230,7 +220,7 @@ export class JerryDebugProtocolHandler {
       throw new Error('unexpected breakpoint list message length');
     }
 
-    let array: Array<number>;
+    let array: Array<number> = [];
     const stackFrame = this.stack[this.stack.length - 1];
     if (data[0] === SP.JERRY_DEBUGGER_BREAKPOINT_LIST) {
       array = stackFrame.lines;
@@ -245,6 +235,19 @@ export class JerryDebugProtocolHandler {
 
   onSourceCode(data: Uint8Array) {
     console.log('[Source Code]');
+
+    if (this.stack.length === 0) {
+      this.stack = [{
+        isFunc: false,
+        line: 1,
+        column: 1,
+        name: '',
+        source: '',
+        lines: [],
+        offsets: [],
+      }];
+    }
+
     this.sourceData = assembleUint8Arrays(this.sourceData, data);
     if (data[0] === SP.JERRY_DEBUGGER_SOURCE_CODE_END) {
       this.source = cesu8ToString(this.sourceData);
