@@ -52,8 +52,9 @@ export class ChromeDevToolsProxyServer {
   readonly port: number;
   readonly uuid: string;
   readonly jsfile: string;
-  private asyncCallStackDepth: number = 0;  // 0 is unlimited
+  private skipAllPauses: boolean = false;
   private pauseOnExceptions: ('none' | 'uncaught' | 'all') = 'none';
+  private asyncCallStackDepth: number = 0;  // 0 is unlimited
   private delegate: CDTDelegate;
   private api: Crdp.CrdpServer;
 
@@ -67,11 +68,6 @@ export class ChromeDevToolsProxyServer {
     this.uuid = options.uuid || uuid();
     // FIXME: probably not quite right, can include ../.. etc.
     this.jsfile = options.jsfile || 'untitled.js';
-
-    () => {
-      // FIXME: pretend to use these to get around lint error for now
-      this.asyncCallStackDepth, this.pauseOnExceptions;
-    };
 
     server.listen(this.port);
 
@@ -98,6 +94,9 @@ export class ChromeDevToolsProxyServer {
 
     this.api.Debugger.expose({
       enable: notImplemented,
+      setSkipAllPauses: async (params) => {
+        this.skipAllPauses = params.skip;
+      },
       setBlackboxPatterns: notImplemented,
       stepOver: async () => this.delegate.requestStepOver(),
       stepInto: async () => this.delegate.requestStepInto(),
@@ -142,6 +141,11 @@ export class ChromeDevToolsProxyServer {
         };
       },
     });
+  }
+
+  unused() {
+    // FIXME: pretend to use these to get around lint error for now
+    this.skipAllPauses, this.pauseOnExceptions, this.asyncCallStackDepth;
   }
 
   scriptParsed(script: JerryMessageScriptParsed) {
