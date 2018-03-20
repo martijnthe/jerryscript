@@ -71,6 +71,7 @@ export class JerryDebugProtocolHandler {
   private functionMap: ProtocolFunctionMap;
 
   private stack: Array<ParserStackFrame>;
+  private sources: Array<string> = [''];
   private source: string = '';
   private sourceData?: Uint8Array;
   private sourceName?: string;
@@ -149,8 +150,10 @@ export class JerryDebugProtocolHandler {
     this.resumeExec(SP.JERRY_DEBUGGER_CONTINUE);
   }
 
-  getSource() {
-    return this.source;
+  getSource(scriptId: number) {
+    if (scriptId < this.sources.length) {
+      return this.sources[scriptId];
+    }
   }
 
   decodeMessage(format: string, message: Uint8Array, offset: number) {
@@ -241,10 +244,11 @@ export class JerryDebugProtocolHandler {
     this.sourceData = assembleUint8Arrays(this.sourceData, data);
     if (data[0] === SP.JERRY_DEBUGGER_SOURCE_CODE_END) {
       this.source = cesu8ToString(this.sourceData);
+      this.sources[++this.lastScriptID] = this.source;
       this.sourceData = undefined;
       if (this.delegate.onScriptParsed) {
         this.delegate.onScriptParsed({
-          'id': ++this.lastScriptID,
+          'id': this.lastScriptID,
           'name': this.sourceName || '',
           'lineCount': this.source.split(/\n[\n]/).length,
         });

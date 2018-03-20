@@ -130,7 +130,7 @@ export class CDTController {
       throw new Error('missing protocol handler');
     }
     return Promise.resolve({
-      scriptSource: this.protocolHandler.getSource(),
+      scriptSource: this.protocolHandler.getSource(Number(request.scriptId)),
     });
   }
 }
