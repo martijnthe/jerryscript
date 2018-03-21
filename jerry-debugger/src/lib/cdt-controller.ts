@@ -54,7 +54,6 @@ export class CDTController {
   }
 
   onBreakpointHit(message: JerryMessageBreakpointHit) {
-    console.log('onBreakpointHit');
     if (this.proxyServer) {
       this.sendPaused(message.breakpoint);
     }

@@ -79,8 +79,6 @@ export class JerryDebuggerClient {
   }
 
   send(data: ArrayBuffer) {
-    if (this.socket) {
-      this.socket.send(data);
-    }
+    this.socket!.send(data);
   }
 }

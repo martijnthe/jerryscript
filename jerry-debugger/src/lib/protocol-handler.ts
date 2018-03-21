@@ -61,8 +61,8 @@ interface FunctionMap {
 
 // abstracts away the details of the protocol
 export class JerryDebugProtocolHandler {
+  public debuggerClient?: JerryDebuggerClient;
   private delegate: JerryDebugProtocolDelegate;
-  private debugger?: JerryDebuggerClient;
 
   // debugger configuration
   private maxMessageSize: number = 0;
@@ -123,10 +123,6 @@ export class JerryDebugProtocolHandler {
     this.lastBreakpointExact;
   }
 
-  setDebugger(debuggerClient: JerryDebuggerClient) {
-    this.debugger = debuggerClient;
-  }
-
   stepOver() {
     this.resumeExec(SP.JERRY_DEBUGGER_NEXT);
   }
@@ -140,13 +136,13 @@ export class JerryDebugProtocolHandler {
   }
 
   pause() {
-    if (!this.debugger) {
+    if (!this.debuggerClient) {
       throw new Error('no debugger found');
     }
     if (this.lastBreakpointHit) {
       throw new Error('attempted pause while at breakpoint');
     }
-    this.debugger.send(encodeMessage(this.byteConfig, 'B', [SP.JERRY_DEBUGGER_STOP]));
+    this.debuggerClient.send(encodeMessage(this.byteConfig, 'B', [SP.JERRY_DEBUGGER_STOP]));
   }
 
   resume() {
@@ -367,12 +363,12 @@ export class JerryDebugProtocolHandler {
   }
 
   private resumeExec(code: number) {
-    if (!this.debugger) {
+    if (!this.debuggerClient) {
       throw new Error('no debugger found');
     }
     if (!this.lastBreakpointHit) {
       throw new Error('attempted resume while not at breakpoint');
     }
-    this.debugger.send(encodeMessage(this.byteConfig, 'B', [code]));
+    this.debuggerClient.send(encodeMessage(this.byteConfig, 'B', [code]));
   }
 }
