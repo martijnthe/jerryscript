@@ -14,7 +14,8 @@
 
 import * as SP from './jrs-protocol-constants';
 import { Breakpoint, ParsedFunction } from './breakpoint';
-import { ByteConfig, cesu8ToString, assembleUint8Arrays, decodeMessage } from './utils';
+import { ByteConfig, cesu8ToString, assembleUint8Arrays, decodeMessage, encodeMessage } from './utils';
+import { JerryDebuggerClient } from './debugger-client';
 
 export type CompressedPointer = number;
 export type ByteCodeOffset = number;
@@ -60,7 +61,8 @@ interface FunctionMap {
 
 // abstracts away the details of the protocol
 export class JerryDebugProtocolHandler {
-  public delegate: JerryDebugProtocolDelegate;
+  public debuggerClient?: JerryDebuggerClient;
+  private delegate: JerryDebugProtocolDelegate;
 
   // debugger configuration
   private maxMessageSize: number = 0;
@@ -100,6 +102,8 @@ export class JerryDebugProtocolHandler {
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME]: this.onSourceCodeName,
       [SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END]: this.onSourceCodeName,
       [SP.JERRY_DEBUGGER_BREAKPOINT_HIT]: this.onBreakpointHit,
+      [SP.JERRY_DEBUGGER_BACKTRACE]: this.onBacktrace,
+      [SP.JERRY_DEBUGGER_BACKTRACE_END]: this.onBacktrace,
     };
 
     this.stack = [{
@@ -117,6 +121,36 @@ export class JerryDebugProtocolHandler {
   unused() {
     this.maxMessageSize,
     this.lastBreakpointExact;
+  }
+
+  stepOver() {
+    this.resumeExec(SP.JERRY_DEBUGGER_NEXT);
+  }
+
+  stepInto() {
+    this.resumeExec(SP.JERRY_DEBUGGER_STEP);
+  }
+
+  stepOut() {
+    console.log('step out not yet supported in JerryScript');
+  }
+
+  pause() {
+    if (!this.debuggerClient) {
+      throw new Error('no debugger found');
+    }
+    if (this.lastBreakpointHit) {
+      throw new Error('attempted pause while at breakpoint');
+    }
+    this.debuggerClient.send(encodeMessage(this.byteConfig, 'B', [SP.JERRY_DEBUGGER_STOP]));
+  }
+
+  resume() {
+    this.resumeExec(SP.JERRY_DEBUGGER_CONTINUE);
+  }
+
+  getSource() {
+    return this.source;
   }
 
   decodeMessage(format: string, message: Uint8Array, offset: number) {
@@ -292,6 +326,10 @@ export class JerryDebugProtocolHandler {
     }
   }
 
+  onBacktrace(message: Uint8Array) {
+    console.log('got backtrace', message);
+  }
+
   onMessage(message: Uint8Array) {
     if (message.byteLength < 1) {
       this.abort('message too short');
@@ -322,5 +360,15 @@ export class JerryDebugProtocolHandler {
       console.log('Abort:', message);
       this.delegate.onError(0, message);
     }
+  }
+
+  private resumeExec(code: number) {
+    if (!this.debuggerClient) {
+      throw new Error('no debugger found');
+    }
+    if (!this.lastBreakpointHit) {
+      throw new Error('attempted resume while not at breakpoint');
+    }
+    this.debuggerClient.send(encodeMessage(this.byteConfig, 'B', [code]));
   }
 }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import Crdp from 'chrome-remote-debug-protocol';
+
 import { Breakpoint } from './breakpoint';
 import { JerryDebugProtocolHandler, JerryMessageScriptParsed, JerryMessageBreakpointHit } from './protocol-handler';
 import { ChromeDevToolsProxyServer } from './cdt-proxy';
@@ -53,7 +55,7 @@ export class CDTController {
 
   onBreakpointHit(message: JerryMessageBreakpointHit) {
     if (this.proxyServer) {
-      this.proxyServer.breakpointHit(message);
+      this.sendPaused(message.breakpoint);
     }
   }
 
@@ -67,12 +69,68 @@ export class CDTController {
     }
   }
 
-  requestBreakpoint() {
+  sendPaused(breakpoint: Breakpoint) {
     if (!this.protocolHandler || !this.proxyServer) {
       throw new Error('missing object dependencies');
     }
-    this.protocolHandler.getLastBreakpoint();
+
     // Node uses 'Break on start' but this is not allowable in crdp.d.ts
-    this.proxyServer.sendPaused('other');
+    this.proxyServer.sendPaused(breakpoint, 'other');
+  }
+
+  requestBreakpoint() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    const breakpoint = this.protocolHandler.getLastBreakpoint();
+    if (!breakpoint) {
+      throw new Error('no last breakpoint found');
+    }
+
+    this.sendPaused(breakpoint);
+  }
+
+  requestStepOver() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.stepOver();
+  }
+
+  requestStepInto() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.stepInto();
+  }
+
+  requestStepOut() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.stepOut();
+  }
+
+  requestPause() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.pause();
+  }
+
+  requestResume() {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    this.protocolHandler.resume();
+  }
+
+  getScriptSource(request: Crdp.Debugger.GetScriptSourceRequest) {
+    if (!this.protocolHandler) {
+      throw new Error('missing protocol handler');
+    }
+    return Promise.resolve({
+      scriptSource: this.protocolHandler.getSource(),
+    });
   }
 }
