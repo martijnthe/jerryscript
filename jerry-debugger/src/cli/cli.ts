@@ -71,21 +71,24 @@ export function main(proc: NodeJS.Process) {
 
   const controller = new CDTController();
   const jhandler = new JerryDebugProtocolHandler(controller);
-  const jdebug = new JerryDebuggerClient({
+  const jclient = new JerryDebuggerClient({
     delegate: jhandler,
     ...options.remoteAddress,
   });
-  controller.setProtocolHandler(jhandler);
+  jhandler.debuggerClient = jclient;
+  // set this before connecting to the client
+  controller.protocolHandler = jhandler;
 
-  const debuggerUrl = `ws://${jdebug.host}:${jdebug.port}`;
-  jdebug.connect().then(() => {
+  const debuggerUrl = `ws://${jclient.host}:${jclient.port}`;
+  jclient.connect().then(() => {
     console.log(`Connected to debugger at ${debuggerUrl}`);
     const proxy = new ChromeDevToolsProxyServer({
       delegate: controller,
       ...options.proxyAddress,
       jsfile: options.jsfile,
     });
-    controller.setProxyServer(proxy);
+    // set this before making further debugger calls
+    controller.proxyServer = proxy;
     console.log(`Proxy listening at ws://${proxy.host}:${proxy.port}`);
   }).catch((err) => {
     console.log(`Error connecting to debugger at ${debuggerUrl}`);

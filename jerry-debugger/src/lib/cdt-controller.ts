@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import Crdp from 'chrome-remote-debug-protocol';
+
 import { Breakpoint } from './breakpoint';
 import { JerryDebugProtocolHandler, JerryMessageScriptParsed, JerryMessageBreakpointHit } from './protocol-handler';
 import { ChromeDevToolsProxyServer } from './cdt-proxy';
@@ -22,21 +24,16 @@ export interface JerryDebuggerDelegate {
 }
 
 export class CDTController {
-  private protocolHandler?: JerryDebugProtocolHandler;
-  private proxyServer?: ChromeDevToolsProxyServer;
+  // NOTE: protocolHandler must be set before methods are called
+  public protocolHandler?: JerryDebugProtocolHandler;
+  // NOTE: proxyServer must be set after debugger is connected, protocolHandler is
+  //   set, and before issuing further commands to the debugger
+  public proxyServer?: ChromeDevToolsProxyServer;
   private scripts: Array<JerryMessageScriptParsed> = [];
 
   // FIXME: this lets test suite run for now
   unused() {
     Breakpoint;
-  }
-
-  setProtocolHandler(handler: JerryDebugProtocolHandler) {
-    this.protocolHandler = handler;
-  }
-
-  setProxyServer(server: ChromeDevToolsProxyServer) {
-    this.proxyServer = server;
   }
 
   // JerryDebuggerDelegate functions
@@ -46,33 +43,67 @@ export class CDTController {
 
   onScriptParsed(message: JerryMessageScriptParsed) {
     this.scripts.push(message);
+    // this can happen before the proxy is connected
     if (this.proxyServer) {
       this.proxyServer.scriptParsed(message);
     }
   }
 
   onBreakpointHit(message: JerryMessageBreakpointHit) {
+    // this can happen before the proxy is connected
     if (this.proxyServer) {
-      this.proxyServer.breakpointHit(message);
+      this.sendPaused(message.breakpoint);
     }
   }
 
   // CDTDelegate functions
+
+  // 'request' functions are information requests from CDT to Debugger
   requestScripts() {
-    if (!this.proxyServer) {
-      throw new Error('missing proxy server');
-    }
     for (let i = 0; i < this.scripts.length; i++) {
-      this.proxyServer.scriptParsed(this.scripts[i]);
+      this.proxyServer!.scriptParsed(this.scripts[i]);
     }
   }
 
   requestBreakpoint() {
-    if (!this.protocolHandler || !this.proxyServer) {
-      throw new Error('missing object dependencies');
+    const breakpoint = this.protocolHandler!.getLastBreakpoint();
+    if (!breakpoint) {
+      throw new Error('no last breakpoint found');
     }
-    this.protocolHandler.getLastBreakpoint();
+
+    this.sendPaused(breakpoint);
+  }
+
+  requestScriptSource(request: Crdp.Debugger.GetScriptSourceRequest) {
+    return Promise.resolve({
+      scriptSource: this.protocolHandler!.getSource(Number(request.scriptId)),
+    });
+  }
+
+  // 'cmd' functions are commands from CDT to Debugger
+  cmdStepOver() {
+    this.protocolHandler!.stepOver();
+  }
+
+  cmdStepInto() {
+    this.protocolHandler!.stepInto();
+  }
+
+  cmdStepOut() {
+    this.protocolHandler!.stepOut();
+  }
+
+  cmdPause() {
+    this.protocolHandler!.pause();
+  }
+
+  cmdResume() {
+    this.protocolHandler!.resume();
+  }
+
+  // 'report' functions are events from Debugger to CDT
+  private sendPaused(breakpoint: Breakpoint) {
     // Node uses 'Break on start' but this is not allowable in crdp.d.ts
-    this.proxyServer.sendPaused('other');
+    this.proxyServer!.sendPaused(breakpoint, 'other');
   }
 }
