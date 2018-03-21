@@ -19,12 +19,19 @@ import Crdp from 'chrome-remote-debug-protocol';
 import * as http from 'http';
 import uuid from 'uuid/v1';
 
+import { Breakpoint } from './breakpoint';
 import { onHttpRequest } from './cdt-proxy-http';
-import { JerryMessageBreakpointHit, JerryMessageScriptParsed } from './protocol-handler';
+import { JerryMessageScriptParsed } from './protocol-handler';
 
 export interface CDTDelegate {
   requestScripts: () => void;
   requestBreakpoint: () => void;
+  requestStepOver: () => void;
+  requestStepInto: () => void;
+  requestStepOut: () => void;
+  requestPause: () => void;
+  requestResume: () => void;
+  getScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) => Promise<Crdp.Debugger.GetScriptSourceResponse>;
 }
 
 export interface ChromeDevToolsProxyServerOptions {
@@ -45,10 +52,12 @@ export class ChromeDevToolsProxyServer {
   readonly port: number;
   readonly uuid: string;
   readonly jsfile: string;
-  private asyncCallStackDepth: number = 0;  // 0 is unlimited
+  private skipAllPauses: boolean = false;
   private pauseOnExceptions: ('none' | 'uncaught' | 'all') = 'none';
+  private asyncCallStackDepth: number = 0;  // 0 is unlimited
   private delegate: CDTDelegate;
   private api: Crdp.CrdpServer;
+  private lastRuntimeScript = 1;
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
     this.delegate = options.delegate;
@@ -60,11 +69,6 @@ export class ChromeDevToolsProxyServer {
     this.uuid = options.uuid || uuid();
     // FIXME: probably not quite right, can include ../.. etc.
     this.jsfile = options.jsfile || 'untitled.js';
-
-    () => {
-      // FIXME: pretend to use these to get around lint error for now
-      this.asyncCallStackDepth, this.pauseOnExceptions;
-    };
 
     server.listen(this.port);
 
@@ -91,12 +95,21 @@ export class ChromeDevToolsProxyServer {
 
     this.api.Debugger.expose({
       enable: notImplemented,
-      setBlackboxPatterns: notImplemented,
-      setAsyncCallStackDepth: async (params) => {
-        this.asyncCallStackDepth = params.maxDepth;
+      setSkipAllPauses: async (params) => {
+        this.skipAllPauses = params.skip;
       },
+      setBlackboxPatterns: notImplemented,
+      stepOver: async () => this.delegate.requestStepOver(),
+      stepInto: async () => this.delegate.requestStepInto(),
+      stepOut: async () => this.delegate.requestStepOut(),
+      pause: async () => this.delegate.requestPause(),
+      resume: async () => this.delegate.requestResume(),
+      getScriptSource: request => this.delegate.getScriptSource(request),
       setPauseOnExceptions: async (params) => {
         this.pauseOnExceptions = params.state;
+      },
+      setAsyncCallStackDepth: async (params) => {
+        this.asyncCallStackDepth = params.maxDepth;
       },
     });
     this.api.Profiler.expose({ enable: notImplemented });
@@ -131,10 +144,20 @@ export class ChromeDevToolsProxyServer {
     });
   }
 
+  unused() {
+    // FIXME: pretend to use these to get around lint error for now
+    this.skipAllPauses, this.pauseOnExceptions, this.asyncCallStackDepth;
+  }
+
   scriptParsed(script: JerryMessageScriptParsed) {
+    let name = script.name;
+    if (!name) {
+      // FIXME: make file / module name available to use here
+      name = 'untitled' + this.lastRuntimeScript++;
+    }
     this.api.Debugger.emitScriptParsed({
       scriptId: String(script.id),
-      url: script.name,
+      url: name,
       startLine: 0,
       startColumn: 0,
       endLine: script.lineCount,
@@ -147,15 +170,23 @@ export class ChromeDevToolsProxyServer {
   /*
    * sends Debugger.paused event for the current debugger location
    */
-  sendPaused(reason: 'exception' | 'other') {
+  sendPaused(breakpoint: Breakpoint, reason: 'exception' | 'other') {
+    const callFrame: Crdp.Debugger.CallFrame = {
+      callFrameId: '0',  // FIXME
+      functionName: '',  // FIXME
+      location: {
+        scriptId: String(breakpoint.func.scriptId),
+        lineNumber: breakpoint.line - 1,  // switch to 0-based
+      },
+      scopeChain: [],
+      this: {
+        type: 'object',
+      },
+    };
     this.api.Debugger.emitPaused({
       hitBreakpoints: [],
       reason,
-      callFrames: [],
+      callFrames: [callFrame],
     });
-  }
-
-  breakpointHit(message: JerryMessageBreakpointHit) {
-    console.log('NOT YET IMPLEMENTED');
   }
 }
