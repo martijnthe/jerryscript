@@ -57,6 +57,7 @@ export class ChromeDevToolsProxyServer {
   private asyncCallStackDepth: number = 0;  // 0 is unlimited
   private delegate: CDTDelegate;
   private api: Crdp.CrdpServer;
+  private lastRuntimeScript = 1;
 
   constructor(options: ChromeDevToolsProxyServerOptions) {
     this.delegate = options.delegate;
@@ -149,9 +150,14 @@ export class ChromeDevToolsProxyServer {
   }
 
   scriptParsed(script: JerryMessageScriptParsed) {
+    let name = script.name;
+    if (!name) {
+      // FIXME: make file / module name available to use here
+      name = 'untitled' + this.lastRuntimeScript++;
+    }
     this.api.Debugger.emitScriptParsed({
       scriptId: String(script.id),
-      url: script.name,
+      url: name,
       startLine: 0,
       startColumn: 0,
       endLine: script.lineCount,
@@ -169,7 +175,7 @@ export class ChromeDevToolsProxyServer {
       callFrameId: '0',  // FIXME
       functionName: '',  // FIXME
       location: {
-        scriptId: '1',  // TODO: will we always have just one script?
+        scriptId: String(breakpoint.func.scriptId),
         lineNumber: breakpoint.line - 1,  // switch to 0-based
       },
       scopeChain: [],

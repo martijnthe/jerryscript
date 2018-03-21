@@ -55,6 +55,7 @@ export class Breakpoint {
 
 export class ParsedFunction {
   readonly isFunc: boolean;
+  readonly scriptId: number;
   readonly byteCodeCP: number;
   readonly line: number;
   readonly column: number;
@@ -69,11 +70,13 @@ export class ParsedFunction {
   constructor(byteCodeCP: number, frame: ParserStackFrame) {
     this.isFunc = frame.isFunc;
     this.byteCodeCP = byteCodeCP;
+    this.scriptId = frame.scriptId;
     this.line = frame.line;
     this.column = frame.column;
     this.name = frame.name;
     this.firstBreakpointLine = frame.lines[0];
     this.firstBreakpointOffset = frame.offsets[0];
+    this.sourceName = frame.sourceName;
 
     for (let i = 0; i < frame.lines.length; i++) {
       const breakpoint = new Breakpoint({
