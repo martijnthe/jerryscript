@@ -56,6 +56,13 @@ export class CDTController {
     }
   }
 
+  onResume() {
+    // this can happen before the proxy is connected
+    if (this.proxyServer) {
+      this.proxyServer.sendResumed();
+    }
+  }
+
   // CDTDelegate functions
 
   // 'request' functions are information requests from CDT to Debugger
