@@ -26,7 +26,8 @@ import { JerryMessageScriptParsed } from './protocol-handler';
 export interface CDTDelegate {
   requestScripts: () => void;
   requestBreakpoint: () => void;
-  requestScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) => Promise<Crdp.Debugger.GetScriptSourceResponse>;
+  requestScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) =>
+    Promise<Crdp.Debugger.GetScriptSourceResponse>;
   cmdStepOver: () => void;
   cmdStepInto: () => void;
   cmdStepOut: () => void;
