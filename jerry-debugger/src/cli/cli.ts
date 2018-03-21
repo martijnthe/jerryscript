@@ -76,7 +76,8 @@ export function main(proc: NodeJS.Process) {
     ...options.remoteAddress,
   });
   jhandler.debuggerClient = jclient;
-  controller.setProtocolHandler(jhandler);
+  // set this before connecting to the client
+  controller.protocolHandler = jhandler;
 
   const debuggerUrl = `ws://${jclient.host}:${jclient.port}`;
   jclient.connect().then(() => {
@@ -86,7 +87,8 @@ export function main(proc: NodeJS.Process) {
       ...options.proxyAddress,
       jsfile: options.jsfile,
     });
-    controller.setProxyServer(proxy);
+    // set this before making further debugger calls
+    controller.proxyServer = proxy;
     console.log(`Proxy listening at ws://${proxy.host}:${proxy.port}`);
   }).catch((err) => {
     console.log(`Error connecting to debugger at ${debuggerUrl}`);

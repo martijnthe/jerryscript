@@ -137,13 +137,10 @@ export class JerryDebugProtocolHandler {
   }
 
   pause() {
-    if (!this.debuggerClient) {
-      throw new Error('no debugger found');
-    }
     if (this.lastBreakpointHit) {
       throw new Error('attempted pause while at breakpoint');
     }
-    this.debuggerClient.send(encodeMessage(this.byteConfig, 'B', [SP.JERRY_DEBUGGER_STOP]));
+    this.debuggerClient!.send(encodeMessage(this.byteConfig, 'B', [SP.JERRY_DEBUGGER_STOP]));
   }
 
   resume() {
@@ -300,13 +297,10 @@ export class JerryDebugProtocolHandler {
 
   onReleaseByteCodeCP(data: Uint8Array) {
     console.log('[Release Byte Code CP]');
-    if (!this.debuggerClient) {
-      throw new Error('no debugger found');
-    }
 
     // just patch up incoming message
     data[0] = SP.JERRY_DEBUGGER_FREE_BYTE_CODE_CP;
-    this.debuggerClient.send(data);
+    this.debuggerClient!.send(data);
   }
 
   getBreakpoint(breakpointData: Array<number>) {
@@ -409,12 +403,9 @@ export class JerryDebugProtocolHandler {
   }
 
   private resumeExec(code: number) {
-    if (!this.debuggerClient) {
-      throw new Error('no debugger found');
-    }
     if (!this.lastBreakpointHit) {
       throw new Error('attempted resume while not at breakpoint');
     }
-    this.debuggerClient.send(encodeMessage(this.byteConfig, 'B', [code]));
+    this.debuggerClient!.send(encodeMessage(this.byteConfig, 'B', [code]));
   }
 }

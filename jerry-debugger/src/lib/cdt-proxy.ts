@@ -26,12 +26,12 @@ import { JerryMessageScriptParsed } from './protocol-handler';
 export interface CDTDelegate {
   requestScripts: () => void;
   requestBreakpoint: () => void;
-  requestStepOver: () => void;
-  requestStepInto: () => void;
-  requestStepOut: () => void;
-  requestPause: () => void;
-  requestResume: () => void;
-  getScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) => Promise<Crdp.Debugger.GetScriptSourceResponse>;
+  requestScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) => Promise<Crdp.Debugger.GetScriptSourceResponse>;
+  cmdStepOver: () => void;
+  cmdStepInto: () => void;
+  cmdStepOut: () => void;
+  cmdPause: () => void;
+  cmdResume: () => void;
 }
 
 export interface ChromeDevToolsProxyServerOptions {
@@ -99,12 +99,12 @@ export class ChromeDevToolsProxyServer {
         this.skipAllPauses = params.skip;
       },
       setBlackboxPatterns: notImplemented,
-      stepOver: async () => this.delegate.requestStepOver(),
-      stepInto: async () => this.delegate.requestStepInto(),
-      stepOut: async () => this.delegate.requestStepOut(),
-      pause: async () => this.delegate.requestPause(),
-      resume: async () => this.delegate.requestResume(),
-      getScriptSource: request => this.delegate.getScriptSource(request),
+      getScriptSource: request => this.delegate.requestScriptSource(request),
+      stepOver: async () => this.delegate.cmdStepOver(),
+      stepInto: async () => this.delegate.cmdStepInto(),
+      stepOut: async () => this.delegate.cmdStepOut(),
+      pause: async () => this.delegate.cmdPause(),
+      resume: async () => this.delegate.cmdResume(),
       setPauseOnExceptions: async (params) => {
         this.pauseOnExceptions = params.state;
       },
@@ -127,7 +127,7 @@ export class ChromeDevToolsProxyServer {
           },
         });
 
-        // request controller to send scriptParsed command for existing scripts
+        // request controller to send scriptParsed event for existing scripts
         this.delegate.requestScripts();
         this.delegate.requestBreakpoint();
       },
