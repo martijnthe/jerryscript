@@ -26,6 +26,8 @@ import { JerryMessageScriptParsed } from './protocol-handler';
 export interface CDTDelegate {
   requestScripts: () => void;
   requestBreakpoint: () => void;
+  requestPossibleBreakpoints: (request: Crdp.Debugger.GetPossibleBreakpointsRequest) =>
+    Promise<Crdp.Debugger.GetPossibleBreakpointsResponse>;
   requestScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) =>
     Promise<Crdp.Debugger.GetScriptSourceResponse>;
   cmdStepOver: () => void;
@@ -33,6 +35,10 @@ export interface CDTDelegate {
   cmdStepOut: () => void;
   cmdPause: () => void;
   cmdResume: () => void;
+  cmdSetBreakpoint: (request: Crdp.Debugger.SetBreakpointRequest) =>
+    Promise<Crdp.Debugger.SetBreakpointResponse>;
+  cmdSetBreakpointByUrl: (request: Crdp.Debugger.SetBreakpointByUrlRequest) =>
+    Promise<Crdp.Debugger.SetBreakpointByUrlResponse>;
 }
 
 export interface ChromeDevToolsProxyServerOptions {
@@ -100,6 +106,7 @@ export class ChromeDevToolsProxyServer {
         this.skipAllPauses = params.skip;
       },
       setBlackboxPatterns: notImplemented,
+      getPossibleBreakpoints: request => this.delegate.requestPossibleBreakpoints(request),
       getScriptSource: request => this.delegate.requestScriptSource(request),
       stepOver: async () => this.delegate.cmdStepOver(),
       stepInto: async () => this.delegate.cmdStepInto(),
@@ -112,6 +119,8 @@ export class ChromeDevToolsProxyServer {
       setAsyncCallStackDepth: async (params) => {
         this.asyncCallStackDepth = params.maxDepth;
       },
+      setBreakpoint: request => this.delegate.cmdSetBreakpoint(request),
+      setBreakpointByUrl: request => this.delegate.cmdSetBreakpointByUrl(request),
     });
     this.api.Profiler.expose({ enable: notImplemented });
     this.api.Runtime.expose({

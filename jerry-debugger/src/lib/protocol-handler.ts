@@ -53,12 +53,34 @@ export interface JerryMessageBreakpointHit {
   exact: boolean;
 }
 
+export interface PossibleBreakpointsParams {
+  scriptId: number;
+  startLine: number;
+  endLine?: number;
+}
+
+export interface FindBreakpointParams {
+  scriptId: number;
+  line: number;
+  column?: number;
+}
+
+export interface UpdateBreakpointParams {
+  breakpoint: Breakpoint;
+  enable: boolean;
+}
+
 interface ProtocolFunctionMap {
   [type: number]: (data: Uint8Array) => void;
 }
 
 interface FunctionMap {
   [cp: string]: ParsedFunction;
+}
+
+interface LineFunctionMap {
+  // maps line number to an array of functions
+  [line: number]: Array<ParsedFunction>;
 }
 
 interface ParsedSource {
@@ -79,6 +101,7 @@ export class JerryDebugProtocolHandler {
 
   private stack: Array<ParserStackFrame> = [];
   private sources: Array<ParsedSource> = [{}];
+  private lineLists: Array<LineFunctionMap> = [[]];
   private source: string = '';
   private sourceData?: Uint8Array;
   private sourceName?: string;
@@ -86,6 +109,7 @@ export class JerryDebugProtocolHandler {
   private functionName?: string;
   private functionNameData?: Uint8Array;
   private functions: FunctionMap = {};
+  private newFunctions: FunctionMap = {};
 
   private nextScriptID: number = 1;
   private exceptionData?: Uint8Array;
@@ -148,6 +172,22 @@ export class JerryDebugProtocolHandler {
     this.resumeExec(SP.JERRY_DEBUGGER_CONTINUE);
   }
 
+  getPossibleBreakpoints(params: PossibleBreakpointsParams): Array<Breakpoint> {
+    const array = [];
+    const lineList = this.lineLists[params.scriptId];
+    for (let line in lineList) {
+      let linenum = Number(line);
+      if (linenum >= params.startLine) {
+        if (!params.endLine || linenum <= params.endLine) {
+          for (let func of lineList[line]) {
+            array.push(func.lines[line]);
+          }
+        }
+      }
+    }
+    return array;
+  }
+
   getSource(scriptId: number) {
     if (scriptId < this.sources.length) {
       return this.sources[scriptId].source || '';
@@ -191,7 +231,7 @@ export class JerryDebugProtocolHandler {
     const byteCodeCP = this.decodeMessage('C', data, 1)[0];
     const func = new ParsedFunction(byteCodeCP, frame);
 
-    this.functions[byteCodeCP] = func;
+    this.newFunctions[byteCodeCP] = func;
     if (this.stack.length > 0) {
       return;
     }
@@ -202,7 +242,24 @@ export class JerryDebugProtocolHandler {
     func.sourceName = this.sourceName;
     this.source = '';
     this.sourceName = undefined;
+
+    const lineList: LineFunctionMap = {};
+    for (let cp in this.newFunctions) {
+      const func = this.newFunctions[cp];
+      this.functions[cp] = func;
+
+      for (let i in func.lines) {
+        // map line numbers to functions for this source
+        if (i in lineList) {
+          lineList[i].push(func);
+        } else {
+          lineList[i] = [func];
+        }
+      }
+    }
+    this.lineLists.push(lineList);
     this.nextScriptID++;
+    this.newFunctions = {};
   }
 
   onParseFunction(data: Uint8Array) {
@@ -394,6 +451,42 @@ export class JerryDebugProtocolHandler {
 
   getLastBreakpoint() {
     return this.lastBreakpointHit;
+  }
+
+  getScriptIdByName(name: string) {
+    // skip the first (dummy) source
+    for (let i = 1; i < this.sources.length; i++) {
+      const source: ParsedSource = this.sources[i];
+      if (name === source.name) {
+        return i;
+      }
+    }
+    throw new Error('no such source');
+  }
+
+  findBreakpoint(params: FindBreakpointParams) {
+    if (params.scriptId <= 0 || params.scriptId >= this.lineLists.length) {
+      throw new Error('invalid script id');
+    }
+    const lineList = this.lineLists[params.scriptId];
+    if (!lineList[params.line]) {
+      throw new Error('no breakpoint found for line: ' + params.line);
+    }
+    for (let func of lineList[params.line]) {
+      const breakpoint = func.lines[params.line];
+      // TODO: when we start handling columns we would need to distinguish them
+      return breakpoint;
+    }
+    throw new Error('no breakpoint found');
+  }
+
+  updateBreakpoint(params: UpdateBreakpointParams) {
+    this.debuggerClient!.send(encodeMessage(this.byteConfig, 'BBCI', [
+      SP.JERRY_DEBUGGER_UPDATE_BREAKPOINT,
+      Number(params.enable),
+      params.breakpoint.func.byteCodeCP,
+      params.breakpoint.offset,
+    ]));
   }
 
   private abort(message: string) {
