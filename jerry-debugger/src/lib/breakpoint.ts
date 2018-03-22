@@ -19,6 +19,7 @@ export interface BreakpointMap {
 }
 
 export interface BreakpointOptions {
+  scriptId: number;
   func: ParsedFunction;
   line: number;
   offset: number;
@@ -26,12 +27,14 @@ export interface BreakpointOptions {
 }
 
 export class Breakpoint {
-  readonly line: number = 1;
-  readonly offset: any;
+  readonly scriptId: number;
   readonly func: ParsedFunction;
+  readonly line: number;
+  readonly offset: number;
   activeIndex: number = -1;
 
   constructor(options: BreakpointOptions) {
+    this.scriptId = options.scriptId;
     this.func = options.func;
     this.line = options.line;
     this.offset = options.offset;
@@ -80,6 +83,7 @@ export class ParsedFunction {
 
     for (let i = 0; i < frame.lines.length; i++) {
       const breakpoint = new Breakpoint({
+        scriptId: frame.scriptId,
         func: this,
         line: frame.lines[i],
         offset: frame.offsets[i],

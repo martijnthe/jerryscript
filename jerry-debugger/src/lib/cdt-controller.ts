@@ -31,7 +31,6 @@ export class CDTController {
   //   set, and before issuing further commands to the debugger
   public proxyServer?: ChromeDevToolsProxyServer;
   private scripts: Array<JerryMessageScriptParsed> = [];
-  private nextBreakpointIndex: number = 1;
 
   // FIXME: this lets test suite run for now
   unused() {
@@ -117,20 +116,17 @@ export class CDTController {
   }
 
   // 'cmd' functions are commands from CDT to Debugger
-  cmdStepOver() {
-    this.protocolHandler!.stepOver();
-  }
-
-  cmdStepInto() {
-    this.protocolHandler!.stepInto();
-  }
-
-  cmdStepOut() {
-    this.protocolHandler!.stepOut();
-  }
-
   cmdPause() {
     this.protocolHandler!.pause();
+  }
+
+  cmdRemoveBreakpoint(breakpointId: number) {
+    const breakpoint = this.protocolHandler!.getActiveBreakpoint(breakpointId);
+    if (!breakpoint) {
+      throw new Error('no breakpoint found');
+    }
+    this.updateBreakpoint(breakpoint.scriptId, breakpoint.line, false);
+    return Promise.resolve();
   }
 
   cmdResume() {
@@ -139,9 +135,9 @@ export class CDTController {
 
   cmdSetBreakpoint(request: Crdp.Debugger.SetBreakpointRequest) {
     const scriptId = Number(request.location.scriptId);
-    this.updateBreakpoint(scriptId, request.location.lineNumber + 1, true);
+    const breakpointId = this.updateBreakpoint(scriptId, request.location.lineNumber + 1, true);
     const response: Crdp.Debugger.SetBreakpointResponse = {
-      breakpointId: String(this.nextBreakpointIndex++),
+      breakpointId: String(breakpointId),
       actualLocation: request.location,
     };
     return Promise.resolve(response);
@@ -153,9 +149,9 @@ export class CDTController {
     }
 
     const scriptId = this.protocolHandler!.getScriptIdByName(request.url);
-    this.updateBreakpoint(scriptId, request.lineNumber + 1, true);
+    const breakpointId = this.updateBreakpoint(scriptId, request.lineNumber + 1, true);
     const response: Crdp.Debugger.SetBreakpointByUrlResponse = {
-      breakpointId: String(this.nextBreakpointIndex++),
+      breakpointId: String(breakpointId),
       locations: [{
         scriptId: String(scriptId),
         lineNumber: request.lineNumber,
@@ -163,6 +159,18 @@ export class CDTController {
       }],
     };
     return Promise.resolve(response);
+  }
+
+  cmdStepInto() {
+    this.protocolHandler!.stepInto();
+  }
+
+  cmdStepOut() {
+    this.protocolHandler!.stepOut();
+  }
+
+  cmdStepOver() {
+    this.protocolHandler!.stepOver();
   }
 
   // 'report' functions are events from Debugger to CDT
@@ -185,10 +193,9 @@ export class CDTController {
       column: 0,  // TODO: use column
     };
     const breakpoint = this.protocolHandler!.findBreakpoint(params);
-    this.protocolHandler!.updateBreakpoint({
-      breakpoint: breakpoint,
-      enable: true,
+    return this.protocolHandler!.updateBreakpoint({
+      breakpoint,
+      enable,
     });
-    return Promise;
   }
 }

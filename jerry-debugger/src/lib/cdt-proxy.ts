@@ -30,15 +30,16 @@ export interface CDTDelegate {
     Promise<Crdp.Debugger.GetPossibleBreakpointsResponse>;
   requestScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) =>
     Promise<Crdp.Debugger.GetScriptSourceResponse>;
-  cmdStepOver: () => void;
-  cmdStepInto: () => void;
-  cmdStepOut: () => void;
   cmdPause: () => void;
+  cmdRemoveBreakpoint: (breakpointId: number) => Promise<void>;
   cmdResume: () => void;
   cmdSetBreakpoint: (request: Crdp.Debugger.SetBreakpointRequest) =>
     Promise<Crdp.Debugger.SetBreakpointResponse>;
   cmdSetBreakpointByUrl: (request: Crdp.Debugger.SetBreakpointByUrlRequest) =>
     Promise<Crdp.Debugger.SetBreakpointByUrlResponse>;
+  cmdStepInto: () => void;
+  cmdStepOut: () => void;
+  cmdStepOver: () => void;
 }
 
 export interface ChromeDevToolsProxyServerOptions {
@@ -108,10 +109,8 @@ export class ChromeDevToolsProxyServer {
       setBlackboxPatterns: notImplemented,
       getPossibleBreakpoints: request => this.delegate.requestPossibleBreakpoints(request),
       getScriptSource: request => this.delegate.requestScriptSource(request),
-      stepOver: async () => this.delegate.cmdStepOver(),
-      stepInto: async () => this.delegate.cmdStepInto(),
-      stepOut: async () => this.delegate.cmdStepOut(),
       pause: async () => this.delegate.cmdPause(),
+      removeBreakpoint: request => this.delegate.cmdRemoveBreakpoint(Number(request.breakpointId)),
       resume: async () => this.delegate.cmdResume(),
       setPauseOnExceptions: async (params) => {
         this.pauseOnExceptions = params.state;
@@ -121,6 +120,9 @@ export class ChromeDevToolsProxyServer {
       },
       setBreakpoint: request => this.delegate.cmdSetBreakpoint(request),
       setBreakpointByUrl: request => this.delegate.cmdSetBreakpointByUrl(request),
+      stepInto: async () => this.delegate.cmdStepInto(),
+      stepOut: async () => this.delegate.cmdStepOut(),
+      stepOver: async () => this.delegate.cmdStepOver(),
     });
     this.api.Profiler.expose({ enable: notImplemented });
     this.api.Runtime.expose({

@@ -115,6 +115,8 @@ export class JerryDebugProtocolHandler {
   private exceptionData?: Uint8Array;
   private lastBreakpointHit?: Breakpoint;
   private lastBreakpointExact: boolean = true;
+  private activeBreakpoints: Array<Breakpoint> = [];
+  private nextBreakpointIndex: number = 0;
 
   constructor(delegate: JerryDebugProtocolDelegate) {
     this.delegate = delegate;
@@ -464,6 +466,10 @@ export class JerryDebugProtocolHandler {
     throw new Error('no such source');
   }
 
+  getActiveBreakpoint(breakpointId: number) {
+    return this.activeBreakpoints[breakpointId];
+  }
+
   findBreakpoint(params: FindBreakpointParams) {
     if (params.scriptId <= 0 || params.scriptId >= this.lineLists.length) {
       throw new Error('invalid script id');
@@ -481,12 +487,29 @@ export class JerryDebugProtocolHandler {
   }
 
   updateBreakpoint(params: UpdateBreakpointParams) {
+    const breakpoint = params.breakpoint;
+    let breakpointId;
+    if (params.enable) {
+      if (breakpoint.activeIndex !== -1) {
+        throw new Error('breakpoint already enabled');
+      }
+      breakpointId = breakpoint.activeIndex = this.nextBreakpointIndex++;
+      this.activeBreakpoints[breakpointId] = breakpoint;
+    } else {
+      if (breakpoint.activeIndex === -1) {
+        throw new Error('breakpoint already disabled');
+      }
+      breakpointId = breakpoint.activeIndex;
+      delete this.activeBreakpoints[breakpointId];
+      breakpoint.activeIndex = -1;
+    }
     this.debuggerClient!.send(encodeMessage(this.byteConfig, 'BBCI', [
       SP.JERRY_DEBUGGER_UPDATE_BREAKPOINT,
       Number(params.enable),
       params.breakpoint.func.byteCodeCP,
       params.breakpoint.offset,
     ]));
+    return breakpointId;
   }
 
   private abort(message: string) {
