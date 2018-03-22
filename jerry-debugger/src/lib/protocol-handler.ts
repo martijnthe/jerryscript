@@ -39,6 +39,7 @@ export interface JerryDebugProtocolDelegate {
   onError?(code: number, message: string): void;
   onScriptParsed?(message: JerryMessageScriptParsed): void;
   onBreakpointHit?(message: JerryMessageBreakpointHit): void;
+  onResume?(): void;
 }
 
 export interface JerryMessageScriptParsed {
@@ -406,6 +407,10 @@ export class JerryDebugProtocolHandler {
     if (!this.lastBreakpointHit) {
       throw new Error('attempted resume while not at breakpoint');
     }
+    this.lastBreakpointHit = undefined;
     this.debuggerClient!.send(encodeMessage(this.byteConfig, 'B', [code]));
+    if (this.delegate.onResume) {
+      this.delegate.onResume();
+    }
   }
 }

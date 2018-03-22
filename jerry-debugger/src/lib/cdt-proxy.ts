@@ -190,4 +190,8 @@ export class ChromeDevToolsProxyServer {
       callFrames: [callFrame],
     });
   }
+
+  sendResumed() {
+    this.api.Debugger.emitResumed();
+  }
 }
