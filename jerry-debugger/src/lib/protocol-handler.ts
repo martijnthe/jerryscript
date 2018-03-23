@@ -37,9 +37,10 @@ export interface ParserStackFrame {
 
 export interface JerryDebugProtocolDelegate {
   onError?(code: number, message: string): void;
-  onScriptParsed?(message: JerryMessageScriptParsed): void;
+  onBacktrace?(backtrace: Array<Breakpoint>): void;
   onBreakpointHit?(message: JerryMessageBreakpointHit): void;
   onResume?(): void;
+  onScriptParsed?(message: JerryMessageScriptParsed): void;
 }
 
 export interface JerryMessageScriptParsed {
@@ -110,6 +111,7 @@ export class JerryDebugProtocolHandler {
   private functionNameData?: Uint8Array;
   private functions: FunctionMap = {};
   private newFunctions: FunctionMap = {};
+  private backtrace: Array<Breakpoint> = [];
 
   private nextScriptID: number = 1;
   private exceptionData?: Uint8Array;
@@ -427,7 +429,17 @@ export class JerryDebugProtocolHandler {
   }
 
   onBacktrace(message: Uint8Array) {
-    console.log('got backtrace', message);
+    for (let i = 1; i < message.byteLength; i += this.byteConfig.cpointerSize + 4) {
+      const breakpointData = this.decodeMessage('CI', message, i);
+      this.backtrace.push(this.getBreakpoint(breakpointData).breakpoint);
+    }
+
+    if (message[0] === SP.JERRY_DEBUGGER_BACKTRACE_END) {
+      if (this.delegate.onBacktrace) {
+        this.delegate.onBacktrace(this.backtrace);
+      }
+      this.backtrace = [];
+    }
   }
 
   onMessage(message: Uint8Array) {
@@ -510,6 +522,13 @@ export class JerryDebugProtocolHandler {
       params.breakpoint.offset,
     ]));
     return breakpointId;
+  }
+
+  requestBacktrace() {
+    if (!this.lastBreakpointHit) {
+      throw new Error('backtrace not allowed while app running');
+    }
+    this.debuggerClient!.send(encodeMessage(this.byteConfig, 'BI', [SP.JERRY_DEBUGGER_GET_BACKTRACE, 0]));
   }
 
   private abort(message: string) {

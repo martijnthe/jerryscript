@@ -31,6 +31,7 @@ export class CDTController {
   //   set, and before issuing further commands to the debugger
   public proxyServer?: ChromeDevToolsProxyServer;
   private scripts: Array<JerryMessageScriptParsed> = [];
+  private pendingBreakpoint?: Breakpoint;
 
   // FIXME: this lets test suite run for now
   unused() {
@@ -53,15 +54,18 @@ export class CDTController {
   onBreakpointHit(message: JerryMessageBreakpointHit) {
     // this can happen before the proxy is connected
     if (this.proxyServer) {
-      this.sendPaused(message.breakpoint);
+      this.pendingBreakpoint = message.breakpoint;
+      this.protocolHandler!.requestBacktrace();
     }
   }
 
+  onBacktrace(backtrace: Array<Breakpoint>) {
+    this.sendPaused(this.pendingBreakpoint, backtrace);
+    this.pendingBreakpoint = undefined;
+  }
+
   onResume() {
-    // this can happen before the proxy is connected
-    if (this.proxyServer) {
-      this.proxyServer.sendResumed();
-    }
+    this.proxyServer!.sendResumed();
   }
 
   // CDTDelegate functions
@@ -79,7 +83,8 @@ export class CDTController {
       throw new Error('no last breakpoint found');
     }
 
-    this.sendPaused(breakpoint);
+    this.pendingBreakpoint = breakpoint;
+    this.protocolHandler!.requestBacktrace();
   }
 
   requestPossibleBreakpoints(request: Crdp.Debugger.GetPossibleBreakpointsRequest) {
@@ -174,9 +179,10 @@ export class CDTController {
   }
 
   // 'report' functions are events from Debugger to CDT
-  private sendPaused(breakpoint: Breakpoint) {
+  private sendPaused(breakpoint: Breakpoint | undefined, backtrace: Array<Breakpoint>) {
     // Node uses 'Break on start' but this is not allowable in crdp.d.ts
-    this.proxyServer!.sendPaused(breakpoint, 'other');
+    const reason = breakpoint ? 'debugCommand' : 'other';
+    this.proxyServer!.sendPaused(breakpoint, backtrace, reason);
   }
 
   /**

@@ -179,26 +179,37 @@ export class ChromeDevToolsProxyServer {
     });
   }
 
-  /*
-   * sends Debugger.paused event for the current debugger location
+  /**
+   * Sends Debugger.paused event for the current debugger location
    */
-  sendPaused(breakpoint: Breakpoint, reason: 'exception' | 'other') {
-    const callFrame: Crdp.Debugger.CallFrame = {
-      callFrameId: '0',  // FIXME
-      functionName: '',  // FIXME
-      location: {
-        scriptId: String(breakpoint.func.scriptId),
-        lineNumber: breakpoint.line - 1,  // switch to 0-based
-      },
-      scopeChain: [],
-      this: {
-        type: 'object',
-      },
-    };
+  sendPaused(breakpoint: Breakpoint | undefined, backtrace: Array<Breakpoint>,
+             reason: 'exception' | 'debugCommand' | 'other') {
+    const callFrames: Array<Crdp.Debugger.CallFrame> = [];
+    let nextFrameId = 0;
+    for (let bp of backtrace) {
+      callFrames.push({
+        callFrameId: String(nextFrameId++),
+        functionName: bp.func.name,
+        location: {
+          scriptId: String(bp.func.scriptId),
+          lineNumber: bp.line - 1,  // switch to 0-based
+        },
+        scopeChain: [],
+        this: {
+          type: 'object',
+        },
+      });
+    }
+
+    const hitBreakpoints = [];
+    if (breakpoint) {
+      hitBreakpoints.push(String(breakpoint.activeIndex));
+    }
+
     this.api.Debugger.emitPaused({
-      hitBreakpoints: [],
+      hitBreakpoints,
       reason,
-      callFrames: [callFrame],
+      callFrames,
     });
   }
 
