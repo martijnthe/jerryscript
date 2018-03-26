@@ -54,23 +54,6 @@ export interface JerryMessageBreakpointHit {
   exact: boolean;
 }
 
-export interface PossibleBreakpointsParams {
-  scriptId: number;
-  startLine: number;
-  endLine?: number;
-}
-
-export interface FindBreakpointParams {
-  scriptId: number;
-  line: number;
-  column?: number;
-}
-
-export interface UpdateBreakpointParams {
-  breakpoint: Breakpoint;
-  enable: boolean;
-}
-
 interface ProtocolFunctionMap {
   [type: number]: (data: Uint8Array) => void;
 }
@@ -176,13 +159,13 @@ export class JerryDebugProtocolHandler {
     this.resumeExec(SP.JERRY_DEBUGGER_CONTINUE);
   }
 
-  getPossibleBreakpoints(params: PossibleBreakpointsParams): Array<Breakpoint> {
+  getPossibleBreakpoints(scriptId: number, startLine: number, endLine?: number): Array<Breakpoint> {
     const array = [];
-    const lineList = this.lineLists[params.scriptId];
+    const lineList = this.lineLists[scriptId];
     for (const line in lineList) {
       const linenum = Number(line);
-      if (linenum >= params.startLine) {
-        if (!params.endLine || linenum <= params.endLine) {
+      if (linenum >= startLine) {
+        if (!endLine || linenum <= endLine) {
           for (const func of lineList[line]) {
             array.push(func.lines[line]);
           }
@@ -482,26 +465,25 @@ export class JerryDebugProtocolHandler {
     return this.activeBreakpoints[breakpointId];
   }
 
-  findBreakpoint(params: FindBreakpointParams) {
-    if (params.scriptId <= 0 || params.scriptId >= this.lineLists.length) {
+  findBreakpoint(scriptId: number, line: number, column: number = 0) {
+    if (scriptId <= 0 || scriptId >= this.lineLists.length) {
       throw new Error('invalid script id');
     }
-    const lineList = this.lineLists[params.scriptId];
-    if (!lineList[params.line]) {
-      throw new Error('no breakpoint found for line: ' + params.line);
+    const lineList = this.lineLists[scriptId];
+    if (!lineList[line]) {
+      throw new Error('no breakpoint found for line: ' + line);
     }
-    for (const func of lineList[params.line]) {
-      const breakpoint = func.lines[params.line];
+    for (const func of lineList[line]) {
+      const breakpoint = func.lines[line];
       // TODO: when we start handling columns we would need to distinguish them
       return breakpoint;
     }
     throw new Error('no breakpoint found');
   }
 
-  updateBreakpoint(params: UpdateBreakpointParams) {
-    const breakpoint = params.breakpoint;
+  updateBreakpoint(breakpoint: Breakpoint, enable: boolean) {
     let breakpointId;
-    if (params.enable) {
+    if (enable) {
       if (breakpoint.activeIndex !== -1) {
         throw new Error('breakpoint already enabled');
       }
@@ -517,9 +499,9 @@ export class JerryDebugProtocolHandler {
     }
     this.debuggerClient!.send(encodeMessage(this.byteConfig, 'BBCI', [
       SP.JERRY_DEBUGGER_UPDATE_BREAKPOINT,
-      Number(params.enable),
-      params.breakpoint.func.byteCodeCP,
-      params.breakpoint.offset,
+      Number(enable),
+      breakpoint.func.byteCodeCP,
+      breakpoint.offset,
     ]));
     return breakpointId;
   }

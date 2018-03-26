@@ -15,8 +15,7 @@
 import Crdp from 'chrome-remote-debug-protocol';
 
 import { Breakpoint } from './breakpoint';
-import { JerryDebugProtocolHandler, JerryMessageScriptParsed, JerryMessageBreakpointHit,
-  PossibleBreakpointsParams, FindBreakpointParams } from './protocol-handler';
+import { JerryDebugProtocolHandler, JerryMessageScriptParsed, JerryMessageBreakpointHit } from './protocol-handler';
 import { ChromeDevToolsProxyServer } from './cdt-proxy';
 
 export interface JerryDebuggerDelegate {
@@ -89,14 +88,13 @@ export class CDTController {
 
   requestPossibleBreakpoints(request: Crdp.Debugger.GetPossibleBreakpointsRequest) {
     // TODO: support restrictToFunction parameter
-    const bpRequest: PossibleBreakpointsParams = {
-      scriptId: Number(request.start.scriptId),
-      startLine: request.start.lineNumber + 1,
-    };
+    const scriptId = Number(request.start.scriptId);
+    const startLine = request.start.lineNumber + 1;
+    let endLine = undefined;
     if (request.end) {
-      bpRequest.endLine = request.end.lineNumber + 1;
+      endLine = request.end.lineNumber + 1;
     }
-    const possible = this.protocolHandler!.getPossibleBreakpoints(bpRequest);
+    const possible = this.protocolHandler!.getPossibleBreakpoints(scriptId, startLine, endLine);
     const array: Array<Crdp.Debugger.BreakLocation> = [];
     for (const i in possible) {
       const breakpoint = possible[i];
@@ -193,15 +191,7 @@ export class CDTController {
    * @param enable   true to enable, false to disable
    */
   private updateBreakpoint(scriptId: number, line: number, enable: boolean) {
-    const params: FindBreakpointParams = {
-      scriptId: scriptId,
-      line: line,
-      column: 0,  // TODO: use column
-    };
-    const breakpoint = this.protocolHandler!.findBreakpoint(params);
-    return this.protocolHandler!.updateBreakpoint({
-      breakpoint,
-      enable,
-    });
+    const breakpoint = this.protocolHandler!.findBreakpoint(scriptId, line);
+    return this.protocolHandler!.updateBreakpoint(breakpoint, enable);
   }
 }
