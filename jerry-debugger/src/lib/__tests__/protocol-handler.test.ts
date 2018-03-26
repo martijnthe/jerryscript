@@ -56,6 +56,23 @@ describe('onConfiguration', () => {
   });
 });
 
+describe('onByteCodeCP', () => {
+  const delegate = {
+    onScriptParsed: jest.fn(),
+  };
+  let handler: JerryDebugProtocolHandler;
+
+  beforeEach(() => {
+    delegate.onScriptParsed.mockClear();
+    handler = new JerryDebugProtocolHandler(delegate);
+  });
+
+  it('throws if stack empty', () => {
+    const array = Uint8Array.from([SP.JERRY_DEBUGGER_BYTE_CODE_CP]);
+    expect(() => handler.onByteCodeCP(array)).toThrow();
+  });
+});
+
 describe('onSourceCode', () => {
   const delegate = {
     onScriptParsed: jest.fn(),
@@ -70,6 +87,7 @@ describe('onSourceCode', () => {
   it('does not call scriptParsed after only SOURCE message', () => {
     const array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE,
       'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    // code = 'abc'
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(0);
   });
@@ -77,10 +95,75 @@ describe('onSourceCode', () => {
   it('immediately calls scriptParsed from END message', () => {
     const array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_END,
       'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    // code = 'abc' + END
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
     const data = delegate.onScriptParsed.mock.calls[0][0];
+    // first script is #1, 'abc' is just one line, and no name was given
+    expect(data.id).toEqual(1);
     expect(data.lineCount).toEqual(1);
+    expect(data.name).toEqual('');
+    expect(handler.getSource(1)).toEqual('abc');
+  });
+
+  it('concatenates multiple SOURCE messages with END message', () => {
+    const data = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE,
+      'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    // code = 'abc' + 'abc' + 'abc'
+    handler.onSourceCode(data);
+    handler.onSourceCode(data);
+    handler.onSourceCode(data);
+    expect(delegate.onScriptParsed).toHaveBeenCalledTimes(0);
+    data[0] = SP.JERRY_DEBUGGER_SOURCE_CODE_END;
+    // code += 'abc' + END
+    handler.onSourceCode(data);
+    expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
+    // 'abcabcabc' + 'abc' = 'abcabcabcabc'
+    expect(handler.getSource(1)).toEqual('abcabcabcabc');
+  });
+});
+
+describe('onSourceCodeName', () => {
+  const delegate = {
+    onScriptParsed: jest.fn(),
+  };
+  let handler: JerryDebugProtocolHandler;
+
+  beforeEach(() => {
+    delegate.onScriptParsed.mockClear();
+    handler = new JerryDebugProtocolHandler(delegate);
+  });
+
+  it('immediately completes name from END message', () => {
+    // name = 'foo' + END
+    let array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END,
+      'f'.charCodeAt(0), 'o'.charCodeAt(0), 'o'.charCodeAt(0)]);
+    handler.onSourceCodeName(array);
+    // source = 'abc' + END
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_END,
+      'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    handler.onSourceCode(array);
+    expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
+    const data = delegate.onScriptParsed.mock.calls[0][0];
+    expect(data.name).toEqual('foo');
+  });
+
+  it('concatenates multiple NAME messages with END message', () => {
+    // name = 'foo'
+    let array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_NAME,
+      'f'.charCodeAt(0), 'o'.charCodeAt(0), 'o'.charCodeAt(0)]);
+    handler.onSourceCodeName(array);
+    // name += 'foo' + END
+    array[0] = SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END;
+    handler.onSourceCodeName(array);
+    // source = 'abc' + END
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_END,
+      'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    handler.onSourceCode(array);
+    expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
+    const data = delegate.onScriptParsed.mock.calls[0][0];
+    // 'foo' + 'foo' = 'foofoo'
+    expect(data.name).toEqual('foofoo');
   });
 });
 
