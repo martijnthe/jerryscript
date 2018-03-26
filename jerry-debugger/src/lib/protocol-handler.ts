@@ -179,11 +179,11 @@ export class JerryDebugProtocolHandler {
   getPossibleBreakpoints(params: PossibleBreakpointsParams): Array<Breakpoint> {
     const array = [];
     const lineList = this.lineLists[params.scriptId];
-    for (let line in lineList) {
-      let linenum = Number(line);
+    for (const line in lineList) {
+      const linenum = Number(line);
       if (linenum >= params.startLine) {
         if (!params.endLine || linenum <= params.endLine) {
-          for (let func of lineList[line]) {
+          for (const func of lineList[line]) {
             array.push(func.lines[line]);
           }
         }
@@ -248,11 +248,11 @@ export class JerryDebugProtocolHandler {
     this.sourceName = undefined;
 
     const lineList: LineFunctionMap = {};
-    for (let cp in this.newFunctions) {
+    for (const cp in this.newFunctions) {
       const func = this.newFunctions[cp];
       this.functions[cp] = func;
 
-      for (let i in func.lines) {
+      for (const i in func.lines) {
         // map line numbers to functions for this source
         if (i in lineList) {
           lineList[i].push(func);
@@ -384,7 +384,7 @@ export class JerryDebugProtocolHandler {
     }
 
     let nearestOffset = -1;
-    for (let currentOffset in func.offsets) {
+    for (const currentOffset in func.offsets) {
       const current = Number(currentOffset);
       if ((current <= offset) && (current > nearestOffset)) {
         nearestOffset = current;
@@ -490,7 +490,7 @@ export class JerryDebugProtocolHandler {
     if (!lineList[params.line]) {
       throw new Error('no breakpoint found for line: ' + params.line);
     }
-    for (let func of lineList[params.line]) {
+    for (const func of lineList[params.line]) {
       const breakpoint = func.lines[params.line];
       // TODO: when we start handling columns we would need to distinguish them
       return breakpoint;

@@ -98,7 +98,7 @@ export class CDTController {
     }
     const possible = this.protocolHandler!.getPossibleBreakpoints(bpRequest);
     const array: Array<Crdp.Debugger.BreakLocation> = [];
-    for (let i in possible) {
+    for (const i in possible) {
       const breakpoint = possible[i];
       const location: Crdp.Debugger.BreakLocation = {
         scriptId: request.start.scriptId,

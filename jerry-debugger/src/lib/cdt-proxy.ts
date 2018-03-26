@@ -186,7 +186,7 @@ export class ChromeDevToolsProxyServer {
              reason: 'exception' | 'debugCommand' | 'other') {
     const callFrames: Array<Crdp.Debugger.CallFrame> = [];
     let nextFrameId = 0;
-    for (let bp of backtrace) {
+    for (const bp of backtrace) {
       callFrames.push({
         callFrameId: String(nextFrameId++),
         functionName: bp.func.name,
