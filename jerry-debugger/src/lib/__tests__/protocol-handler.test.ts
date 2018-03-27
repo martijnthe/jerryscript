@@ -95,14 +95,14 @@ describe('onSourceCode', () => {
   });
 
   it('does not call scriptParsed after only SOURCE message', () => {
-    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE, 'abc');
+    const array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE, 'abc');
     // code = 'abc'
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(0);
   });
 
   it('immediately calls scriptParsed from END message', () => {
-    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'abc');
+    const array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'abc');
     // code = 'abc' + END
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
@@ -115,7 +115,7 @@ describe('onSourceCode', () => {
   });
 
   it('concatenates multiple SOURCE messages with END message', () => {
-    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE, 'abc');
+    const array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE, 'abc');
     // code = 'abc' + 'abc' + 'abc'
     handler.onSourceCode(array);
     handler.onSourceCode(array);
@@ -161,7 +161,7 @@ describe('onSourceCodeName', () => {
     array[0] = SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END;
     handler.onSourceCodeName(array);
     // source = 'abc' + END
-    array[0] = SP.JERRY_DEBUGGER_SOURCE_CODE_END;
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'abc');
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
     const data = delegate.onScriptParsed.mock.calls[0][0];
@@ -232,14 +232,14 @@ describe('getScriptIdByName', () => {
 describe('findBreakpoint', () => {
   it('throws on scriptId 0 with one source', () => {
     const handler = new JerryDebugProtocolHandler({});
-    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    const array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
     handler.onSourceCode(array);
     expect(() => handler.findBreakpoint(0, 5)).toThrow();
   });
 
   it('throws on scriptId 2 with one source', () => {
     const handler = new JerryDebugProtocolHandler({});
-    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    const array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
     handler.onSourceCode(array);
     expect(() => handler.findBreakpoint(2, 5)).toThrow();
   });
