@@ -26,13 +26,20 @@ import { JerryMessageScriptParsed } from './protocol-handler';
 export interface CDTDelegate {
   requestScripts: () => void;
   requestBreakpoint: () => void;
+  requestPossibleBreakpoints: (request: Crdp.Debugger.GetPossibleBreakpointsRequest) =>
+    Promise<Crdp.Debugger.GetPossibleBreakpointsResponse>;
   requestScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) =>
     Promise<Crdp.Debugger.GetScriptSourceResponse>;
-  cmdStepOver: () => void;
+  cmdPause: () => void;
+  cmdRemoveBreakpoint: (breakpointId: number) => Promise<void>;
+  cmdResume: () => void;
+  cmdSetBreakpoint: (request: Crdp.Debugger.SetBreakpointRequest) =>
+    Promise<Crdp.Debugger.SetBreakpointResponse>;
+  cmdSetBreakpointByUrl: (request: Crdp.Debugger.SetBreakpointByUrlRequest) =>
+    Promise<Crdp.Debugger.SetBreakpointByUrlResponse>;
   cmdStepInto: () => void;
   cmdStepOut: () => void;
-  cmdPause: () => void;
-  cmdResume: () => void;
+  cmdStepOver: () => void;
 }
 
 export interface ChromeDevToolsProxyServerOptions {
@@ -100,11 +107,10 @@ export class ChromeDevToolsProxyServer {
         this.skipAllPauses = params.skip;
       },
       setBlackboxPatterns: notImplemented,
+      getPossibleBreakpoints: request => this.delegate.requestPossibleBreakpoints(request),
       getScriptSource: request => this.delegate.requestScriptSource(request),
-      stepOver: async () => this.delegate.cmdStepOver(),
-      stepInto: async () => this.delegate.cmdStepInto(),
-      stepOut: async () => this.delegate.cmdStepOut(),
       pause: async () => this.delegate.cmdPause(),
+      removeBreakpoint: request => this.delegate.cmdRemoveBreakpoint(Number(request.breakpointId)),
       resume: async () => this.delegate.cmdResume(),
       setPauseOnExceptions: async (params) => {
         this.pauseOnExceptions = params.state;
@@ -112,6 +118,11 @@ export class ChromeDevToolsProxyServer {
       setAsyncCallStackDepth: async (params) => {
         this.asyncCallStackDepth = params.maxDepth;
       },
+      setBreakpoint: request => this.delegate.cmdSetBreakpoint(request),
+      setBreakpointByUrl: request => this.delegate.cmdSetBreakpointByUrl(request),
+      stepInto: async () => this.delegate.cmdStepInto(),
+      stepOut: async () => this.delegate.cmdStepOut(),
+      stepOver: async () => this.delegate.cmdStepOver(),
     });
     this.api.Profiler.expose({ enable: notImplemented });
     this.api.Runtime.expose({
@@ -168,26 +179,37 @@ export class ChromeDevToolsProxyServer {
     });
   }
 
-  /*
-   * sends Debugger.paused event for the current debugger location
+  /**
+   * Sends Debugger.paused event for the current debugger location
    */
-  sendPaused(breakpoint: Breakpoint, reason: 'exception' | 'other') {
-    const callFrame: Crdp.Debugger.CallFrame = {
-      callFrameId: '0',  // FIXME
-      functionName: '',  // FIXME
-      location: {
-        scriptId: String(breakpoint.func.scriptId),
-        lineNumber: breakpoint.line - 1,  // switch to 0-based
-      },
-      scopeChain: [],
-      this: {
-        type: 'object',
-      },
-    };
+  sendPaused(breakpoint: Breakpoint | undefined, backtrace: Array<Breakpoint>,
+             reason: 'exception' | 'debugCommand' | 'other') {
+    const callFrames: Array<Crdp.Debugger.CallFrame> = [];
+    let nextFrameId = 0;
+    for (const bp of backtrace) {
+      callFrames.push({
+        callFrameId: String(nextFrameId++),
+        functionName: bp.func.name,
+        location: {
+          scriptId: String(bp.func.scriptId),
+          lineNumber: bp.line - 1,  // switch to 0-based
+        },
+        scopeChain: [],
+        this: {
+          type: 'object',
+        },
+      });
+    }
+
+    const hitBreakpoints = [];
+    if (breakpoint) {
+      hitBreakpoints.push(String(breakpoint.activeIndex));
+    }
+
     this.api.Debugger.emitPaused({
-      hitBreakpoints: [],
+      hitBreakpoints,
       reason,
-      callFrames: [callFrame],
+      callFrames,
     });
   }
 

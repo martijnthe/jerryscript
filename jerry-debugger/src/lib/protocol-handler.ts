@@ -37,9 +37,10 @@ export interface ParserStackFrame {
 
 export interface JerryDebugProtocolDelegate {
   onError?(code: number, message: string): void;
-  onScriptParsed?(message: JerryMessageScriptParsed): void;
+  onBacktrace?(backtrace: Array<Breakpoint>): void;
   onBreakpointHit?(message: JerryMessageBreakpointHit): void;
   onResume?(): void;
+  onScriptParsed?(message: JerryMessageScriptParsed): void;
 }
 
 export interface JerryMessageScriptParsed {
@@ -61,6 +62,11 @@ interface FunctionMap {
   [cp: string]: ParsedFunction;
 }
 
+interface LineFunctionMap {
+  // maps line number to an array of functions
+  [line: number]: Array<ParsedFunction>;
+}
+
 interface ParsedSource {
   name?: string;
   source?: string;
@@ -78,7 +84,10 @@ export class JerryDebugProtocolHandler {
   private functionMap: ProtocolFunctionMap;
 
   private stack: Array<ParserStackFrame> = [];
+  // first element is a dummy because sources is 1-indexed
   private sources: Array<ParsedSource> = [{}];
+  // first element is a dummy because lineLists is 1-indexed
+  private lineLists: Array<LineFunctionMap> = [[]];
   private source: string = '';
   private sourceData?: Uint8Array;
   private sourceName?: string;
@@ -86,11 +95,15 @@ export class JerryDebugProtocolHandler {
   private functionName?: string;
   private functionNameData?: Uint8Array;
   private functions: FunctionMap = {};
+  private newFunctions: FunctionMap = {};
+  private backtrace: Array<Breakpoint> = [];
 
   private nextScriptID: number = 1;
   private exceptionData?: Uint8Array;
   private lastBreakpointHit?: Breakpoint;
   private lastBreakpointExact: boolean = true;
+  private activeBreakpoints: Array<Breakpoint> = [];
+  private nextBreakpointIndex: number = 0;
 
   constructor(delegate: JerryDebugProtocolDelegate) {
     this.delegate = delegate;
@@ -148,6 +161,22 @@ export class JerryDebugProtocolHandler {
     this.resumeExec(SP.JERRY_DEBUGGER_CONTINUE);
   }
 
+  getPossibleBreakpoints(scriptId: number, startLine: number, endLine?: number): Array<Breakpoint> {
+    const array = [];
+    const lineList = this.lineLists[scriptId];
+    for (const line in lineList) {
+      const linenum = Number(line);
+      if (linenum >= startLine) {
+        if (!endLine || linenum <= endLine) {
+          for (const func of lineList[line]) {
+            array.push(func.lines[line]);
+          }
+        }
+      }
+    }
+    return array;
+  }
+
   getSource(scriptId: number) {
     if (scriptId < this.sources.length) {
       return this.sources[scriptId].source || '';
@@ -191,7 +220,7 @@ export class JerryDebugProtocolHandler {
     const byteCodeCP = this.decodeMessage('C', data, 1)[0];
     const func = new ParsedFunction(byteCodeCP, frame);
 
-    this.functions[byteCodeCP] = func;
+    this.newFunctions[byteCodeCP] = func;
     if (this.stack.length > 0) {
       return;
     }
@@ -202,7 +231,24 @@ export class JerryDebugProtocolHandler {
     func.sourceName = this.sourceName;
     this.source = '';
     this.sourceName = undefined;
+
+    const lineList: LineFunctionMap = {};
+    for (const cp in this.newFunctions) {
+      const func = this.newFunctions[cp];
+      this.functions[cp] = func;
+
+      for (const i in func.lines) {
+        // map line numbers to functions for this source
+        if (i in lineList) {
+          lineList[i].push(func);
+        } else {
+          lineList[i] = [func];
+        }
+      }
+    }
+    this.lineLists.push(lineList);
     this.nextScriptID++;
+    this.newFunctions = {};
   }
 
   onParseFunction(data: Uint8Array) {
@@ -323,7 +369,7 @@ export class JerryDebugProtocolHandler {
     }
 
     let nearestOffset = -1;
-    for (let currentOffset in func.offsets) {
+    for (const currentOffset in func.offsets) {
       const current = Number(currentOffset);
       if ((current <= offset) && (current > nearestOffset)) {
         nearestOffset = current;
@@ -368,7 +414,17 @@ export class JerryDebugProtocolHandler {
   }
 
   onBacktrace(message: Uint8Array) {
-    console.log('got backtrace', message);
+    for (let i = 1; i < message.byteLength; i += this.byteConfig.cpointerSize + 4) {
+      const breakpointData = this.decodeMessage('CI', message, i);
+      this.backtrace.push(this.getBreakpoint(breakpointData).breakpoint);
+    }
+
+    if (message[0] === SP.JERRY_DEBUGGER_BACKTRACE_END) {
+      if (this.delegate.onBacktrace) {
+        this.delegate.onBacktrace(this.backtrace);
+      }
+      this.backtrace = [];
+    }
   }
 
   onMessage(message: Uint8Array) {
@@ -394,6 +450,69 @@ export class JerryDebugProtocolHandler {
 
   getLastBreakpoint() {
     return this.lastBreakpointHit;
+  }
+
+  getScriptIdByName(name: string) {
+    // skip the first (dummy) source
+    for (let i = 1; i < this.sources.length; i++) {
+      const source: ParsedSource = this.sources[i];
+      if (name === source.name) {
+        return i;
+      }
+    }
+    throw new Error('no such source');
+  }
+
+  getActiveBreakpoint(breakpointId: number) {
+    return this.activeBreakpoints[breakpointId];
+  }
+
+  findBreakpoint(scriptId: number, line: number, column: number = 0) {
+    if (scriptId <= 0 || scriptId >= this.lineLists.length) {
+      throw new Error('invalid script id');
+    }
+    const lineList = this.lineLists[scriptId];
+    if (!lineList[line]) {
+      throw new Error('no breakpoint found for line: ' + line);
+    }
+    for (const func of lineList[line]) {
+      const breakpoint = func.lines[line];
+      // TODO: when we start handling columns we would need to distinguish them
+      return breakpoint;
+    }
+    throw new Error('no breakpoint found');
+  }
+
+  updateBreakpoint(breakpoint: Breakpoint, enable: boolean) {
+    let breakpointId;
+    if (enable) {
+      if (breakpoint.activeIndex !== -1) {
+        throw new Error('breakpoint already enabled');
+      }
+      breakpointId = breakpoint.activeIndex = this.nextBreakpointIndex++;
+      this.activeBreakpoints[breakpointId] = breakpoint;
+    } else {
+      if (breakpoint.activeIndex === -1) {
+        throw new Error('breakpoint already disabled');
+      }
+      breakpointId = breakpoint.activeIndex;
+      delete this.activeBreakpoints[breakpointId];
+      breakpoint.activeIndex = -1;
+    }
+    this.debuggerClient!.send(encodeMessage(this.byteConfig, 'BBCI', [
+      SP.JERRY_DEBUGGER_UPDATE_BREAKPOINT,
+      Number(enable),
+      breakpoint.func.byteCodeCP,
+      breakpoint.offset,
+    ]));
+    return breakpointId;
+  }
+
+  requestBacktrace() {
+    if (!this.lastBreakpointHit) {
+      throw new Error('backtrace not allowed while app running');
+    }
+    this.debuggerClient!.send(encodeMessage(this.byteConfig, 'BI', [SP.JERRY_DEBUGGER_GET_BACKTRACE, 0]));
   }
 
   private abort(message: string) {
