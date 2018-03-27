@@ -170,6 +170,87 @@ describe('onSourceCodeName', () => {
   });
 });
 
+describe('onBreakpointHit', () => {
+  it('calls delegate function if available', () => {
+    const delegate = {
+      onBreakpointHit: jest.fn(),
+    };
+    const handler = new JerryDebugProtocolHandler(delegate);
+
+    let array = Uint8Array.from([0, 128, 2, 1, 1]);
+    handler.onConfiguration(array);
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_LIST, 25, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST, 125, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BYTE_CODE_CP, 42, 0]);
+    handler.onByteCodeCP(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_HIT, 42, 0, 125, 0, 0, 0]);
+    expect(delegate.onBreakpointHit).toHaveBeenCalledTimes(0);
+    handler.onBreakpointHit(array);
+    expect(delegate.onBreakpointHit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('onBacktrace', () => {
+  const delegate = {
+    onBacktrace: jest.fn(),
+  };
+  const handler = new JerryDebugProtocolHandler(delegate);
+
+  beforeEach(() => {
+    delegate.onBacktrace.mockClear();
+  });
+
+  it('calls delegate function immediately on END event', () => {
+    let array = Uint8Array.from([0, 128, 2, 1, 1]);
+    handler.onConfiguration(array);
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_LIST,
+      16, 0, 0, 0,
+      25, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST,
+      64, 0, 0, 0,
+      125, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BYTE_CODE_CP, 42, 0]);
+    handler.onByteCodeCP(array);
+
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BACKTRACE_END, 42, 0, 125, 0, 0, 0]);
+    expect(delegate.onBacktrace).toHaveBeenCalledTimes(0);
+    handler.onBacktrace(array);
+    expect(delegate.onBacktrace).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls delegate function only on END event', () => {
+    let array = Uint8Array.from([0, 128, 2, 1, 1]);
+    handler.onConfiguration(array);
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_LIST,
+      16, 0, 0, 0,
+      25, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST,
+      64, 0, 0, 0,
+      125, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BYTE_CODE_CP, 42, 0]);
+    handler.onByteCodeCP(array);
+
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BACKTRACE, 42, 0, 64, 0, 0, 0]);
+    expect(delegate.onBacktrace).toHaveBeenCalledTimes(0);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BACKTRACE_END, 42, 0, 125, 0, 0, 0]);
+    expect(delegate.onBacktrace).toHaveBeenCalledTimes(0);
+    handler.onBacktrace(array);
+    expect(delegate.onBacktrace).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('onMessage', () => {
   const delegate = {
     onError: jest.fn(),
@@ -242,5 +323,126 @@ describe('findBreakpoint', () => {
     const array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
     handler.onSourceCode(array);
     expect(() => handler.findBreakpoint(2, 5)).toThrow();
+  });
+
+  it('throws on line w/o breakpoint, succeeds on line w/ breakpoint', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    let array = Uint8Array.from([0, 128, 2, 1, 1]);
+    handler.onConfiguration(array);
+
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_LIST,
+      4, 0, 0, 0,
+      9, 0, 0, 0,
+      16, 0, 0, 0,
+      25, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST,
+      8, 0, 0, 0,
+      27, 0, 0, 0,
+      64, 0, 0, 0,
+      125, 0, 0, 0]);
+    handler.onBreakpointList(array);
+
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BYTE_CODE_CP, 42, 0]);
+    handler.onByteCodeCP(array);
+    expect(() => handler.findBreakpoint(1, 6)).toThrow();
+    expect(handler.findBreakpoint(1, 4).line).toEqual(4);
+  });
+});
+
+describe('updateBreakpoint', () => {
+  const debugClient = {
+    send: jest.fn(),
+  };
+
+  beforeEach(() => {
+    debugClient.send.mockClear();
+  });
+
+  it('throws on enabling active breakpoint', () => {
+    const bp: any = { activeIndex: 3 };
+    const handler = new JerryDebugProtocolHandler({});
+    expect(() => { handler.updateBreakpoint(bp, true); }).toThrowError('breakpoint already enabled');
+  });
+
+  it('throws on disabling inactive breakpoint', () => {
+    const bp: any = { activeIndex: -1 };
+    const handler = new JerryDebugProtocolHandler({});
+    expect(() => { handler.updateBreakpoint(bp, false); }).toThrowError('breakpoint already disabled');
+  });
+
+  it('enables inactive breakpoint successfully', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    let array = Uint8Array.from([0, 128, 2, 1, 1]);
+    handler.onConfiguration(array);
+    handler.debuggerClient = debugClient as any;
+
+    const bp: any = {
+      activeIndex: -1,
+      func: {
+        byteCodeCP: 42,
+      },
+      offset: 10,
+    };
+    expect(handler.updateBreakpoint(bp, true)).toEqual(bp.activeIndex);
+    expect(bp.activeIndex).not.toEqual(-1);
+    expect(debugClient.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables active breakpoint successfully', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    let array = Uint8Array.from([0, 128, 2, 1, 1]);
+    handler.onConfiguration(array);
+    handler.debuggerClient = debugClient as any;
+
+    const bp: any = {
+      activeIndex: 4,
+      func: {
+        byteCodeCP: 42,
+      },
+      offset: 10,
+    };
+    expect(handler.updateBreakpoint(bp, false)).toEqual(4);
+    expect(bp.activeIndex).toEqual(-1);
+    expect(debugClient.send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('requestBacktrace', () => {
+  const debugClient = {
+    send: jest.fn(),
+  };
+
+  beforeEach(() => {
+    debugClient.send.mockClear();
+  });
+
+  it('throws if not at a breakpoint', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    expect(() => handler.requestBacktrace()).toThrow();
+  });
+
+  it('sends if at a breakpoint', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    handler.debuggerClient = debugClient as any;
+
+    let array = Uint8Array.from([0, 128, 2, 1, 1]);
+    handler.onConfiguration(array);
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_LIST, 25, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_OFFSET_LIST, 125, 0, 0, 0]);
+    handler.onBreakpointList(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BYTE_CODE_CP, 42, 0]);
+    handler.onByteCodeCP(array);
+    array = Uint8Array.from([SP.JERRY_DEBUGGER_BREAKPOINT_HIT, 42, 0, 125, 0, 0, 0]);
+    handler.onBreakpointHit(array);
+    expect(debugClient.send).toHaveBeenCalledTimes(0);
+    handler.requestBacktrace();
+    expect(debugClient.send).toHaveBeenCalledTimes(1);
   });
 });
