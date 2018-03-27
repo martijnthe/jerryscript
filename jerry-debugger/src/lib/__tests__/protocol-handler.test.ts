@@ -15,6 +15,16 @@
 import { JerryDebugProtocolHandler } from '../protocol-handler';
 import * as SP from '../jrs-protocol-constants';
 
+// utility function
+function encodeArray(byte: number, str: string) {
+  const array = new Uint8Array(1 + str.length);
+  array[0] = byte & 0xff;
+  for (let i = 0; i < str.length; i++) {
+    array[i + 1] = str.charCodeAt(i);
+  }
+  return array;
+}
+
 describe('onConfiguration', () => {
   const delegate = {
     onError: jest.fn(),
@@ -85,16 +95,14 @@ describe('onSourceCode', () => {
   });
 
   it('does not call scriptParsed after only SOURCE message', () => {
-    const array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE,
-      'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE, 'abc');
     // code = 'abc'
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(0);
   });
 
   it('immediately calls scriptParsed from END message', () => {
-    const array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_END,
-      'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'abc');
     // code = 'abc' + END
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
@@ -107,16 +115,15 @@ describe('onSourceCode', () => {
   });
 
   it('concatenates multiple SOURCE messages with END message', () => {
-    const data = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE,
-      'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE, 'abc');
     // code = 'abc' + 'abc' + 'abc'
-    handler.onSourceCode(data);
-    handler.onSourceCode(data);
-    handler.onSourceCode(data);
+    handler.onSourceCode(array);
+    handler.onSourceCode(array);
+    handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(0);
-    data[0] = SP.JERRY_DEBUGGER_SOURCE_CODE_END;
+    array[0] = SP.JERRY_DEBUGGER_SOURCE_CODE_END;
     // code += 'abc' + END
-    handler.onSourceCode(data);
+    handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
     // 'abcabcabc' + 'abc' = 'abcabcabcabc'
     expect(handler.getSource(1)).toEqual('abcabcabcabc');
@@ -136,12 +143,10 @@ describe('onSourceCodeName', () => {
 
   it('immediately completes name from END message', () => {
     // name = 'foo' + END
-    let array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END,
-      'f'.charCodeAt(0), 'o'.charCodeAt(0), 'o'.charCodeAt(0)]);
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END, 'foo');
     handler.onSourceCodeName(array);
     // source = 'abc' + END
-    array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_END,
-      'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'abc');
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
     const data = delegate.onScriptParsed.mock.calls[0][0];
@@ -150,15 +155,13 @@ describe('onSourceCodeName', () => {
 
   it('concatenates multiple NAME messages with END message', () => {
     // name = 'foo'
-    let array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_NAME,
-      'f'.charCodeAt(0), 'o'.charCodeAt(0), 'o'.charCodeAt(0)]);
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_NAME, 'foo');
     handler.onSourceCodeName(array);
     // name += 'foo' + END
     array[0] = SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END;
     handler.onSourceCodeName(array);
     // source = 'abc' + END
-    array = Uint8Array.from([SP.JERRY_DEBUGGER_SOURCE_CODE_END,
-      'a'.charCodeAt(0), 'b'.charCodeAt(0), 'c'.charCodeAt(0)]);
+    array[0] = SP.JERRY_DEBUGGER_SOURCE_CODE_END;
     handler.onSourceCode(array);
     expect(delegate.onScriptParsed).toHaveBeenCalledTimes(1);
     const data = delegate.onScriptParsed.mock.calls[0][0];
@@ -195,5 +198,49 @@ describe('onMessage', () => {
     array[0] = 255;
     handler.onMessage(array);
     expect(delegate.onError).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getScriptIdByName', () => {
+  it('throws if no sources', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    expect(() => handler.getScriptIdByName('mozzarella')).toThrow();
+  });
+
+  it('throws if not match for source name', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END, 'mozzarella');
+    handler.onSourceCodeName(array);
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+
+    expect(() => handler.getScriptIdByName('pepperjack')).toThrow();
+  });
+
+  it('returns index match found for source name', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END, 'mozzarella');
+    handler.onSourceCodeName(array);
+    array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+
+    // script IDs are 1-indexed
+    expect(handler.getScriptIdByName('mozzarella')).toEqual(1);
+  });
+});
+
+describe('findBreakpoint', () => {
+  it('throws on scriptId 0 with one source', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+    expect(() => handler.findBreakpoint(0, 5)).toThrow();
+  });
+
+  it('throws on scriptId 2 with one source', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    let array = encodeArray(SP.JERRY_DEBUGGER_SOURCE_CODE_END, 'code');
+    handler.onSourceCode(array);
+    expect(() => handler.findBreakpoint(2, 5)).toThrow();
   });
 });
