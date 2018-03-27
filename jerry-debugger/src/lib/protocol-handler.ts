@@ -84,7 +84,9 @@ export class JerryDebugProtocolHandler {
   private functionMap: ProtocolFunctionMap;
 
   private stack: Array<ParserStackFrame> = [];
+  // first element is a dummy because sources is 1-indexed
   private sources: Array<ParsedSource> = [{}];
+  // first element is a dummy because lineLists is 1-indexed
   private lineLists: Array<LineFunctionMap> = [[]];
   private source: string = '';
   private sourceData?: Uint8Array;
