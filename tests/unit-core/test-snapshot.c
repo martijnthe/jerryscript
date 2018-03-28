@@ -23,6 +23,29 @@
  */
 #define SNAPSHOT_BUFFER_SIZE (256)
 
+/**
+ * Magic strings
+ */
+static const jerry_char_ptr_t magic_strings[] =
+{
+  (const jerry_char_ptr_t) " ",
+  (const jerry_char_ptr_t) "a",
+  (const jerry_char_ptr_t) "b",
+  (const jerry_char_ptr_t) "c",
+  (const jerry_char_ptr_t) "from",
+  (const jerry_char_ptr_t) "func",
+  (const jerry_char_ptr_t) "string",
+  (const jerry_char_ptr_t) "snapshot"
+};
+
+/**
+ * Magic string lengths
+ */
+static const jerry_length_t magic_string_lengths[] =
+{
+  1, 1, 1, 1, 4, 4, 6, 8
+};
+
 static void test_function_snapshot (void)
 {
   /* function to snapshot */
@@ -79,11 +102,72 @@ static void test_function_snapshot (void)
   jerry_cleanup ();
 } /* test_function_snapshot */
 
+static void arguments_test_exec_snapshot (uint32_t *snapshot_p, size_t snapshot_size, bool copy_bytecode)
+{
+  jerry_init (JERRY_INIT_EMPTY);
+  jerry_value_t res = jerry_exec_snapshot (snapshot_p,
+                                           snapshot_size,
+                                           copy_bytecode);
+  TEST_ASSERT (!jerry_value_has_error_flag (res));
+  TEST_ASSERT (jerry_value_is_number (res));
+  double raw_value = jerry_get_number_value (res);
+  TEST_ASSERT (raw_value == 15);
+  jerry_release_value (res);
+
+  jerry_cleanup ();
+} /* arguments_test_exec_snapshot */
+
+static void test_function_arguments_snapshot (void)
+{
+  if (jerry_is_feature_enabled (JERRY_FEATURE_SNAPSHOT_SAVE)
+      && jerry_is_feature_enabled (JERRY_FEATURE_SNAPSHOT_EXEC))
+  {
+    static uint32_t global_arguments_snapshot_buffer[SNAPSHOT_BUFFER_SIZE];
+    static uint32_t eval_arguments_snapshot_buffer[SNAPSHOT_BUFFER_SIZE];
+    const char *code_to_snapshot_p = ("function f(a,b,c) {"
+                                      "  arguments[0]++;"
+                                      "  arguments[1]++;"
+                                      "  arguments[2]++;"
+                                      "  return a + b + c;"
+                                      "}"
+                                      "f(3,4,5);");
+    jerry_init (JERRY_INIT_EMPTY);
+    size_t global_mode_snapshot_size = jerry_parse_and_save_snapshot ((jerry_char_t *) code_to_snapshot_p,
+                                                                      strlen (code_to_snapshot_p),
+                                                                      true,
+                                                                      false,
+                                                                      global_arguments_snapshot_buffer,
+                                                                      SNAPSHOT_BUFFER_SIZE);
+    TEST_ASSERT (global_mode_snapshot_size != 0);
+    jerry_cleanup ();
+
+    jerry_init (JERRY_INIT_EMPTY);
+    size_t eval_mode_snapshot_size = jerry_parse_and_save_snapshot ((jerry_char_t *) code_to_snapshot_p,
+                                                                    strlen (code_to_snapshot_p),
+                                                                    false,
+                                                                    false,
+                                                                    eval_arguments_snapshot_buffer,
+                                                                    SNAPSHOT_BUFFER_SIZE);
+    TEST_ASSERT (eval_mode_snapshot_size != 0);
+    jerry_cleanup ();
+
+    arguments_test_exec_snapshot (eval_arguments_snapshot_buffer, eval_mode_snapshot_size, false);
+    arguments_test_exec_snapshot (eval_arguments_snapshot_buffer, eval_mode_snapshot_size, true);
+
+    arguments_test_exec_snapshot (global_arguments_snapshot_buffer, global_mode_snapshot_size, false);
+    arguments_test_exec_snapshot (global_arguments_snapshot_buffer, global_mode_snapshot_size, true);
+  }
+} /* test_function_arguments_snapshot */
+
 static void test_exec_snapshot (uint32_t *snapshot_p, size_t snapshot_size, bool copy_bytecode)
 {
   char string_data[32];
 
   jerry_init (JERRY_INIT_EMPTY);
+
+  jerry_register_magic_strings (magic_strings,
+                                sizeof (magic_string_lengths) / sizeof (jerry_length_t),
+                                magic_string_lengths);
 
   jerry_value_t res = jerry_exec_snapshot (snapshot_p,
                                            snapshot_size,
@@ -104,15 +188,15 @@ static void test_exec_snapshot (uint32_t *snapshot_p, size_t snapshot_size, bool
 int
 main (void)
 {
+  static uint32_t global_mode_snapshot_buffer[SNAPSHOT_BUFFER_SIZE];
+  static uint32_t eval_mode_snapshot_buffer[SNAPSHOT_BUFFER_SIZE];
+
   TEST_INIT ();
 
   /* Dump / execute snapshot */
   if (jerry_is_feature_enabled (JERRY_FEATURE_SNAPSHOT_SAVE)
       && jerry_is_feature_enabled (JERRY_FEATURE_SNAPSHOT_EXEC))
   {
-    static uint32_t global_mode_snapshot_buffer[SNAPSHOT_BUFFER_SIZE];
-    static uint32_t eval_mode_snapshot_buffer[SNAPSHOT_BUFFER_SIZE];
-
     const char *code_to_snapshot_p = "(function () { return 'string from snapshot'; }) ();";
 
     jerry_init (JERRY_INIT_EMPTY);
@@ -127,18 +211,18 @@ main (void)
     /* Check the snapshot data. Unused bytes should be filled with zeroes */
     const uint8_t expected_data[] =
     {
-      0x4A, 0x52, 0x52, 0x59, 0x08, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00,
+      0x4A, 0x52, 0x52, 0x59, 0x0A, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x48, 0x00, 0x00, 0x00,
       0x01, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00,
       0x03, 0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
-      0x00, 0x00, 0x00, 0x01, 0x03, 0x00, 0x28, 0x00,
-      0xB7, 0x46, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x02, 0x00, 0x01, 0x00, 0x21, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x47, 0x00,
-      0x1C, 0x00, 0x00, 0x00, 0x14, 0x00, 0x73, 0x74,
-      0x72, 0x69, 0x6E, 0x67, 0x20, 0x66, 0x72, 0x6F,
-      0x6D, 0x20, 0x73, 0x6E, 0x61, 0x70, 0x73, 0x68,
-      0x6F, 0x74, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x01, 0x18, 0x00, 0x00, 0x00,
+      0x28, 0x00, 0xB7, 0x46, 0x00, 0x00, 0x00, 0x00,
+      0x03, 0x00, 0x01, 0x00, 0x41, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x01, 0x01, 0x07, 0x00, 0x00, 0x00,
+      0x47, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x14, 0x00, 0x73, 0x74, 0x72, 0x69, 0x6E, 0x67,
+      0x20, 0x66, 0x72, 0x6F, 0x6D, 0x20, 0x73, 0x6E,
+      0x61, 0x70, 0x73, 0x68, 0x6F, 0x74
     };
     TEST_ASSERT (sizeof (expected_data) == global_mode_snapshot_size);
     TEST_ASSERT (0 == memcmp (expected_data, global_mode_snapshot_buffer, sizeof (expected_data)));
@@ -170,6 +254,36 @@ main (void)
     test_exec_snapshot (eval_mode_snapshot_buffer,
                         eval_mode_snapshot_size,
                         true);
+  }
+
+  /* Static snapshot */
+  if (jerry_is_feature_enabled (JERRY_FEATURE_SNAPSHOT_SAVE)
+      && jerry_is_feature_enabled (JERRY_FEATURE_SNAPSHOT_EXEC))
+  {
+    const char *code_to_snapshot_p = ("function func(a, b, c) {"
+                                      "  c = 'snapshot';"
+                                      "  return arguments[0] + ' ' + b + ' ' + arguments[2];"
+                                      "};"
+                                      "func('string', 'from');");
+
+    jerry_init (JERRY_INIT_EMPTY);
+    jerry_register_magic_strings (magic_strings,
+                                  sizeof (magic_string_lengths) / sizeof (jerry_length_t),
+                                  magic_string_lengths);
+
+    size_t global_mode_snapshot_size = jerry_parse_and_save_static_snapshot ((jerry_char_t *) code_to_snapshot_p,
+                                                                             strlen (code_to_snapshot_p),
+                                                                             true,
+                                                                             false,
+                                                                             global_mode_snapshot_buffer,
+                                                                             SNAPSHOT_BUFFER_SIZE);
+    TEST_ASSERT (global_mode_snapshot_size != 0);
+
+    jerry_cleanup ();
+
+    test_exec_snapshot (global_mode_snapshot_buffer,
+                        global_mode_snapshot_size,
+                        false);
   }
 
   /* Merge snapshot */
@@ -296,6 +410,8 @@ main (void)
   }
 
   test_function_snapshot ();
+
+  test_function_arguments_snapshot ();
 
   return 0;
 } /* main */

@@ -40,6 +40,11 @@
 #define BUILTIN_UNDERSCORED_ID json
 #include "ecma-builtin-internal-routines-template.inc.h"
 
+/**
+ * The number of expected hexidecimal characters in a hex escape sequence
+ */
+#define ECMA_JSON_HEX_ESCAPE_SEQUENCE_LENGTH (4)
+
 /** \addtogroup ecma ECMA
  * @{
  *
@@ -182,13 +187,18 @@ ecma_builtin_json_parse_string (ecma_json_token_t *token_p) /**< token argument 
         }
         case LIT_CHAR_LOWERCASE_U:
         {
-          ecma_char_t code_unit;
-          if ((end_p - current_p >= 2) && !(lit_read_code_unit_from_hex (current_p + 1, 4, &code_unit)))
+          if ((end_p - current_p <= ECMA_JSON_HEX_ESCAPE_SEQUENCE_LENGTH))
           {
             return;
           }
 
-          current_p += 5;
+          ecma_char_t code_unit;
+          if (!(lit_read_code_unit_from_hex (current_p + 1, ECMA_JSON_HEX_ESCAPE_SEQUENCE_LENGTH, &code_unit)))
+          {
+            return;
+          }
+
+          current_p += ECMA_JSON_HEX_ESCAPE_SEQUENCE_LENGTH + 1;
 
           lit_utf8_byte_t char_buffer[LIT_UTF8_MAX_BYTES_IN_CODE_UNIT];
           buffer_size += lit_code_unit_to_utf8 (code_unit, char_buffer);
@@ -258,9 +268,9 @@ ecma_builtin_json_parse_string (ecma_json_token_t *token_p) /**< token argument 
         {
           ecma_char_t code_unit;
 
-          lit_read_code_unit_from_hex (current_p + 1, 4, &code_unit);
+          lit_read_code_unit_from_hex (current_p + 1, ECMA_JSON_HEX_ESCAPE_SEQUENCE_LENGTH, &code_unit);
 
-          current_p += 5;
+          current_p += ECMA_JSON_HEX_ESCAPE_SEQUENCE_LENGTH + 1;
           write_p += lit_code_unit_to_utf8 (code_unit, write_p);
           continue;
         }
@@ -846,11 +856,10 @@ ecma_builtin_json_parse (ecma_value_t this_arg, /**< 'this' argument */
     if (ecma_op_is_callable (arg2))
     {
       ecma_object_t *object_p = ecma_op_create_object_object_noarg ();
-      ecma_string_t *name_p = ecma_get_magic_string (LIT_MAGIC_STRING__EMPTY);
 
       ecma_property_value_t *prop_value_p;
       prop_value_p = ecma_create_named_data_property (object_p,
-                                                      name_p,
+                                                      ecma_get_magic_string (LIT_MAGIC_STRING__EMPTY),
                                                       ECMA_PROPERTY_CONFIGURABLE_ENUMERABLE_WRITABLE,
                                                       NULL);
 
@@ -859,9 +868,8 @@ ecma_builtin_json_parse (ecma_value_t this_arg, /**< 'this' argument */
 
       ret_value = ecma_builtin_json_walk (ecma_get_object_from_value (arg2),
                                           object_p,
-                                          name_p);
+                                          ecma_get_magic_string (LIT_MAGIC_STRING__EMPTY));
       ecma_deref_object (object_p);
-      ecma_deref_ecma_string (name_p);
     }
     else
     {
@@ -1133,7 +1141,6 @@ ecma_builtin_json_stringify (ecma_value_t this_arg, /**< 'this' argument */
       ECMA_FINALIZE (str_val);
 
       ecma_deref_object (obj_wrapper_p);
-      ecma_deref_ecma_string (empty_str_p);
     }
 
     ecma_deref_ecma_string (context.gap_str_p);
@@ -1403,8 +1410,7 @@ ecma_builtin_json_str (ecma_string_t *key_p, /**< property key*/
       else
       {
         /* 9.b */
-        ecma_string_t *null_str_p = ecma_get_magic_string (LIT_MAGIC_STRING_NULL);
-        ret_value = ecma_make_string_value (null_str_p);
+        ret_value = ecma_make_magic_string_value (LIT_MAGIC_STRING_NULL);
       }
     }
     /* 10. */
@@ -1510,7 +1516,8 @@ ecma_builtin_json_object (ecma_object_t *obj_p, /**< the object*/
 
       JERRY_ASSERT (ecma_is_property_enumerable (property));
 
-      if (ECMA_PROPERTY_GET_TYPE (property) == ECMA_PROPERTY_TYPE_NAMEDDATA)
+      if (ECMA_PROPERTY_GET_TYPE (property) == ECMA_PROPERTY_TYPE_NAMEDDATA
+          || ECMA_PROPERTY_GET_TYPE (property) == ECMA_PROPERTY_TYPE_VIRTUAL)
       {
         ecma_append_to_values_collection (property_keys_p, *ecma_value_p, 0);
       }
@@ -1685,9 +1692,7 @@ ecma_builtin_json_array (ecma_object_t *obj_p, /**< the array object*/
     /* 8.b */
     if (ecma_is_value_undefined (str_val))
     {
-      ecma_string_t *null_str_p = ecma_get_magic_string (LIT_MAGIC_STRING_NULL);
-      ecma_append_to_values_collection (partial_p, ecma_make_string_value (null_str_p), 0);
-      ecma_deref_ecma_string (null_str_p);
+      ecma_append_to_values_collection (partial_p, ecma_make_magic_string_value (LIT_MAGIC_STRING_NULL), 0);
     }
     /* 8.c */
     else

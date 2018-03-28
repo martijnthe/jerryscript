@@ -24,19 +24,13 @@
 
 #ifdef JERRY_DEBUGGER
 
-#ifdef HAVE_TIME_H
-#include <time.h>
-#elif defined (HAVE_UNISTD_H)
-#include <unistd.h>
-#endif /* HAVE_TIME_H */
-
 /**
  * The number of message types in the debugger should reflect the
  * debugger versioning.
  */
 JERRY_STATIC_ASSERT (JERRY_DEBUGGER_MESSAGES_OUT_MAX_COUNT == 27
-                     && JERRY_DEBUGGER_MESSAGES_IN_MAX_COUNT == 18
-                     && JERRY_DEBUGGER_VERSION == 1,
+                     && JERRY_DEBUGGER_MESSAGES_IN_MAX_COUNT == 19
+                     && JERRY_DEBUGGER_VERSION == 2,
                      debugger_version_correlates_to_message_type_count);
 
 /**
@@ -80,7 +74,7 @@ jerry_debugger_free_unreferenced_byte_code (void)
  * Send backtrace.
  */
 static void
-jerry_debugger_send_backtrace (uint8_t *recv_buffer_p) /**< pointer the the received data */
+jerry_debugger_send_backtrace (uint8_t *recv_buffer_p) /**< pointer to the received data */
 {
   JERRY_DEBUGGER_RECEIVE_BUFFER_AS (jerry_debugger_receive_get_backtrace_t, get_backtrace_p);
 
@@ -175,12 +169,8 @@ jerry_debugger_send_eval (const lit_utf8_byte_t *eval_string_p, /**< evaluated s
 
     if (ecma_is_value_object (result))
     {
-      ecma_string_t *message_string_p = ecma_get_magic_string (LIT_MAGIC_STRING_MESSAGE);
-
       message = ecma_op_object_find (ecma_get_object_from_value (result),
-                                     message_string_p);
-
-      ecma_deref_ecma_string (message_string_p);
+                                     ecma_get_magic_string (LIT_MAGIC_STRING_MESSAGE));
 
       if (!ecma_is_value_string (message)
           || ecma_string_is_empty (ecma_get_string_from_value (message)))
@@ -198,7 +188,7 @@ jerry_debugger_send_eval (const lit_utf8_byte_t *eval_string_p, /**< evaluated s
     }
     else
     {
-      /* Primitve type. */
+      /* Primitive type. */
       message = ecma_op_to_string (result);
       JERRY_ASSERT (!ECMA_IS_VALUE_ERROR (message));
     }
@@ -224,15 +214,7 @@ jerry_debugger_send_eval (const lit_utf8_byte_t *eval_string_p, /**< evaluated s
 void
 jerry_debugger_sleep (void)
 {
-#ifdef HAVE_TIME_H
-  nanosleep (&(const struct timespec)
-  {
-    JERRY_DEBUGGER_TIMEOUT / 1000, (JERRY_DEBUGGER_TIMEOUT % 1000) * 1000000L /* Seconds, nanoseconds */
-  }
-  , NULL);
-#elif defined (HAVE_UNISTD_H)
-  usleep ((useconds_t) JERRY_DEBUGGER_TIMEOUT * 1000);
-#endif /* HAVE_TIME_H */
+  jerry_port_sleep (JERRY_DEBUGGER_TIMEOUT);
 } /* jerry_debugger_sleep */
 
 /**
@@ -253,7 +235,7 @@ jerry_debugger_sleep (void)
  *         false - otherwise
  */
 inline bool __attr_always_inline___
-jerry_debugger_process_message (uint8_t *recv_buffer_p, /**< pointer the the received data */
+jerry_debugger_process_message (uint8_t *recv_buffer_p, /**< pointer to the received data */
                                 uint32_t message_size, /**< message size */
                                 bool *resume_exec_p, /**< pointer to the resume exec flag */
                                 uint8_t *expected_message_type_p, /**< message type */
@@ -438,6 +420,19 @@ jerry_debugger_process_message (uint8_t *recv_buffer_p, /**< pointer the the rec
 
       JERRY_DEBUGGER_SET_FLAGS (JERRY_DEBUGGER_VM_STOP);
       JERRY_CONTEXT (debugger_stop_context) = JERRY_CONTEXT (vm_top_context_p);
+      *resume_exec_p = true;
+      return true;
+    }
+
+    case JERRY_DEBUGGER_FINISH:
+    {
+      JERRY_DEBUGGER_CHECK_PACKET_SIZE (jerry_debugger_receive_type_t);
+
+      JERRY_DEBUGGER_SET_FLAGS (JERRY_DEBUGGER_VM_STOP);
+
+      /* This will point to the current context's parent (where the function was called)
+       * and in case of NULL the result will the same as in case of STEP. */
+      JERRY_CONTEXT (debugger_stop_context) = JERRY_CONTEXT (vm_top_context_p->prev_context_p);
       *resume_exec_p = true;
       return true;
     }
@@ -978,12 +973,9 @@ jerry_debugger_exception_object_to_string (ecma_value_t exception_obj_value) /**
   lit_utf8_byte_t data[16];
   memcpy (data, lit_get_magic_string_utf8 (string_id), size);
 
-  ecma_string_t message_string;
-  ecma_init_ecma_magic_string (&message_string, LIT_MAGIC_STRING_MESSAGE);
-
   ecma_property_t *property_p;
   property_p = ecma_find_named_property (ecma_get_object_from_value (exception_obj_value),
-                                         &message_string);
+                                         ecma_get_magic_string (LIT_MAGIC_STRING_MESSAGE));
 
   if (property_p == NULL
       || ECMA_PROPERTY_GET_TYPE (*property_p) != ECMA_PROPERTY_TYPE_NAMEDDATA)

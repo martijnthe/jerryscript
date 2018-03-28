@@ -544,7 +544,7 @@ lexer_parse_identifier (parser_context_t *context_p, /**< context */
   {
     /* Fill literal data. */
     context_p->token.lit_location.char_p = ident_start_p;
-    context_p->token.lit_location.length = (uint16_t) length;
+    context_p->token.lit_location.length = (prop_length_t) length;
   }
 
   context_p->source_p = source_p;
@@ -815,7 +815,7 @@ lexer_parse_string (parser_context_t *context_p) /**< context */
 
   /* Fill literal data. */
   context_p->token.lit_location.char_p = string_start_p;
-  context_p->token.lit_location.length = (uint16_t) length;
+  context_p->token.lit_location.length = (prop_length_t) length;
   context_p->token.lit_location.type = LEXER_STRING_LITERAL;
   context_p->token.lit_location.has_escape = has_escape;
 
@@ -966,7 +966,7 @@ lexer_parse_number (parser_context_t *context_p) /**< context */
     parser_raise_error (context_p, PARSER_ERR_NUMBER_TOO_LONG);
   }
 
-  context_p->token.lit_location.length = (uint16_t) length;
+  context_p->token.lit_location.length = (prop_length_t) length;
   PARSER_PLUS_EQUAL_LC (context_p->column, length);
   context_p->source_p = source_p;
 } /* lexer_parse_number */
@@ -1374,7 +1374,7 @@ lexer_process_char_literal (parser_context_t *context_p, /**< context */
   }
 
   literal_p = (lexer_literal_t *) parser_list_append (context_p, &context_p->literal_pool);
-  literal_p->prop.length = (uint16_t) length;
+  literal_p->prop.length = (prop_length_t) length;
   literal_p->type = literal_type;
   literal_p->status_flags = has_escape ? 0 : LEXER_FLAG_SOURCE_PTR;
 
@@ -1718,7 +1718,7 @@ lexer_construct_number_object (parser_context_t *context_p, /**< context */
   lexer_literal_t *literal_p;
   ecma_number_t num;
   uint32_t literal_index = 0;
-  uint16_t length = context_p->token.lit_location.length;
+  prop_length_t length = context_p->token.lit_location.length;
 
   if (context_p->token.extra_value != LEXER_NUMBER_OCTAL)
   {
@@ -1759,13 +1759,13 @@ lexer_construct_number_object (parser_context_t *context_p, /**< context */
     num = -num;
   }
 
-  jmem_cpointer_t lit_cp = ecma_find_or_create_literal_number (num);
+  ecma_value_t lit_value = ecma_find_or_create_literal_number (num);
   parser_list_iterator_init (&context_p->literal_pool, &literal_iterator);
 
   while ((literal_p = (lexer_literal_t *) parser_list_iterator_next (&literal_iterator)) != NULL)
   {
     if (literal_p->type == LEXER_NUMBER_LITERAL
-        && literal_p->u.value == lit_cp)
+        && literal_p->u.value == lit_value)
     {
       context_p->lit_object.literal_p = literal_p;
       context_p->lit_object.index = (uint16_t) literal_index;
@@ -1790,7 +1790,7 @@ lexer_construct_number_object (parser_context_t *context_p, /**< context */
 
   context_p->literal_count++;
 
-  literal_p->u.value = lit_cp;
+  literal_p->u.value = lit_value;
   literal_p->type = LEXER_NUMBER_LITERAL;
 
   context_p->lit_object.literal_p = literal_p;
@@ -2007,7 +2007,7 @@ lexer_construct_regexp_object (parser_context_t *context_p, /**< context */
   }
 
   literal_p = (lexer_literal_t *) parser_list_append (context_p, &context_p->literal_pool);
-  literal_p->prop.length = (uint16_t) length;
+  literal_p->prop.length = (prop_length_t) length;
   literal_p->type = LEXER_UNUSED_LITERAL;
   literal_p->status_flags = 0;
 

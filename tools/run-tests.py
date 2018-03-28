@@ -25,11 +25,8 @@ import settings
 
 OUTPUT_DIR = os.path.join(settings.PROJECT_DIR, 'build', 'tests')
 
-class Options(object):
-    def __init__(self, name, build_args=None, test_args=None):
-        self.name = name
-        self.build_args = build_args or []
-        self.test_args = test_args or []
+Options = collections.namedtuple('Options', ['name', 'build_args', 'test_args'])
+Options.__new__.__defaults__ = ([], [])
 
 def get_binary_path(bin_dir_path):
     return os.path.join(bin_dir_path, 'jerry')
@@ -37,13 +34,29 @@ def get_binary_path(bin_dir_path):
 # Test options for unittests
 JERRY_UNITTESTS_OPTIONS = [
     Options('unittests',
-            ['--unittests', '--jerry-cmdline=off', '--error-messages=on', '--snapshot-save=on', '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es2015-subset', '--mem-stats=on']),
+            ['--unittests', '--jerry-cmdline=off', '--error-messages=on', '--snapshot-save=on',
+             '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es2015-subset', '--mem-stats=on']),
     Options('unittests-debug',
-            ['--unittests', '--jerry-cmdline=off', '--debug', '--error-messages=on', '--snapshot-save=on', '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es2015-subset', '--mem-stats=on']),
+            ['--unittests', '--jerry-cmdline=off', '--debug', '--error-messages=on', '--snapshot-save=on',
+             '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es2015-subset', '--mem-stats=on']),
     Options('doctests',
-            ['--doctests', '--jerry-cmdline=off', '--error-messages=on', '--snapshot-save=on', '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es2015-subset']),
+            ['--doctests', '--jerry-cmdline=off', '--error-messages=on', '--snapshot-save=on',
+             '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es2015-subset']),
     Options('doctests-debug',
-            ['--doctests', '--jerry-cmdline=off', '--debug', '--error-messages=on', '--snapshot-save=on', '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es2015-subset'])
+            ['--doctests', '--jerry-cmdline=off', '--debug', '--error-messages=on',
+             '--snapshot-save=on', '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es2015-subset']),
+    Options('unittests-es5.1',
+            ['--unittests', '--jerry-cmdline=off', '--error-messages=on', '--snapshot-save=on',
+             '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es5.1', '--mem-stats=on']),
+    Options('unittests-es5.1-debug',
+            ['--unittests', '--jerry-cmdline=off', '--debug', '--error-messages=on', '--snapshot-save=on',
+             '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es5.1', '--mem-stats=on']),
+    Options('doctests-es5.1',
+            ['--doctests', '--jerry-cmdline=off', '--error-messages=on', '--snapshot-save=on',
+             '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es5.1']),
+    Options('doctests-es5.1-debug',
+            ['--doctests', '--jerry-cmdline=off', '--debug', '--error-messages=on',
+             '--snapshot-save=on', '--snapshot-exec=on', '--vm-exec-stop=on', '--profile=es5.1'])
 ]
 
 # Test options for jerry-tests
@@ -61,6 +74,8 @@ JERRY_TESTS_OPTIONS = [
             ['--snapshot']),
     Options('jerry_tests-es2015_subset-debug',
             ['--debug', '--profile=es2015-subset']),
+    Options('jerry_tests-es5.1-debug',
+            ['--debug', '--profile=es5.1']),
     Options('jerry_tests-debug-external_context',
             ['--debug', '--jerry-libc=off', '--external-context=on'])
 ]
@@ -76,7 +91,8 @@ JERRY_TEST_SUITE_OPTIONS.extend([
     Options('jerry_test_suite-minimal-debug',
             ['--debug', '--profile=minimal']),
     Options('jerry_test_suite-minimal-debug-snapshot',
-            ['--debug', '--profile=minimal', '--snapshot-save=on', '--snapshot-exec=on', '--jerry-cmdline-snapshot=on'],
+            ['--debug', '--profile=minimal', '--snapshot-save=on', '--snapshot-exec=on',
+             '--jerry-cmdline-snapshot=on'],
             ['--snapshot']),
     Options('jerry_test_suite-es2015_subset',
             ['--profile=es2015-subset']),
@@ -84,7 +100,17 @@ JERRY_TEST_SUITE_OPTIONS.extend([
             ['--profile=es2015-subset', '--snapshot-save=on', '--snapshot-exec=on', '--jerry-cmdline-snapshot=on'],
             ['--snapshot']),
     Options('jerry_test_suite-es2015_subset-debug-snapshot',
-            ['--debug', '--profile=es2015-subset', '--snapshot-save=on', '--snapshot-exec=on', '--jerry-cmdline-snapshot=on'],
+            ['--debug', '--profile=es2015-subset', '--snapshot-save=on', '--snapshot-exec=on',
+             '--jerry-cmdline-snapshot=on'],
+            ['--snapshot']),
+    Options('jerry_test_suite_es5.1',
+            ['--profile=es5.1']),
+    Options('jerry_test_suite-es5.1-snapshot',
+            ['--profile=es5.1', '--snapshot-save=on', '--snapshot-exec=on', '--jerry-cmdline-snapshot=on'],
+            ['--snapshot']),
+    Options('jerry_test_suite-es5.1-debug-snapshot',
+            ['--debug', '--profile=es5.1', '--snapshot-save=on', '--snapshot-exec=on',
+             '--jerry-cmdline-snapshot=on'],
             ['--snapshot'])
 ])
 
@@ -133,6 +159,8 @@ def get_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--toolchain', metavar='FILE',
                         help='Add toolchain file')
+    parser.add_argument('-q', '--quiet', action='store_true',
+                        help='Only print out failing tests')
     parser.add_argument('--buildoptions', metavar='LIST',
                         help='Add a comma separated list of extra build options to each test')
     parser.add_argument('--skip-list', metavar='LIST',
@@ -264,6 +292,9 @@ def run_jerry_tests(options):
         if options.skip_list:
             skip_list.append(options.skip_list)
 
+        if options.quiet:
+            test_cmd.append("-q")
+
         if skip_list:
             test_cmd.append("--skip-list=" + ",".join(skip_list))
 
@@ -289,6 +320,9 @@ def run_jerry_test_suite(options):
             test_cmd.append(settings.JERRY_TEST_SUITE_DIR)
         else:
             test_cmd.append(settings.JERRY_TEST_SUITE_ES51_LIST)
+
+        if options.quiet:
+            test_cmd.append("-q")
 
         if options.skip_list:
             test_cmd.append("--skip-list=" + options.skip_list)
@@ -329,7 +363,8 @@ def run_unittests(options):
 
         ret_test |= run_check([
             settings.UNITTEST_RUNNER_SCRIPT,
-            bin_dir_path
+            bin_dir_path,
+            "-q" if options.quiet else "",
         ])
 
     return ret_build | ret_test
@@ -342,9 +377,9 @@ def run_buildoption_test(options):
 
     return ret
 
-def main(options):
-    Check = collections.namedtuple('Check', ['enabled', 'runner', 'arg'])
+Check = collections.namedtuple('Check', ['enabled', 'runner', 'arg'])
 
+def main(options):
     checks = [
         Check(options.check_signed_off, run_check, [settings.SIGNED_OFF_SCRIPT]
               + {'tolerant': ['--tolerant'], 'travis': ['--travis']}.get(options.check_signed_off, [])),

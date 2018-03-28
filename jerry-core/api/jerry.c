@@ -215,7 +215,10 @@ jerry_cleanup (void)
        this_p = next_p)
   {
     next_p = this_p->next_p;
-    this_p->manager_p->deinit_cb (JERRY_CONTEXT_DATA_HEADER_USER_DATA (this_p));
+    if (this_p->manager_p->deinit_cb)
+    {
+      this_p->manager_p->deinit_cb (JERRY_CONTEXT_DATA_HEADER_USER_DATA (this_p));
+    }
     jmem_heap_free_block (this_p, sizeof (jerry_context_data_header_t) + this_p->manager_p->bytes_needed);
   }
 
@@ -313,7 +316,8 @@ jerry_get_memory_stats (jerry_heap_stats_t *out_stats_p) /**< [out] heap memory 
     return false;
   }
 
-  jmem_heap_stats_t jmem_heap_stats = {0};
+  jmem_heap_stats_t jmem_heap_stats;
+  memset (&jmem_heap_stats, 0, sizeof (jmem_heap_stats));
   jmem_heap_get_stats (&jmem_heap_stats);
 
   *out_stats_p = (jerry_heap_stats_t)
@@ -554,11 +558,7 @@ jerry_run (const jerry_value_t func_val) /**< function to run */
     return jerry_throw (ecma_raise_type_error (ECMA_ERR_MSG (wrong_args_msg_p)));
   }
 
-  const ecma_compiled_code_t *bytecode_data_p;
-  bytecode_data_p = ECMA_GET_INTERNAL_VALUE_POINTER (const ecma_compiled_code_t,
-                                                     ext_func_p->u.function.bytecode_cp);
-
-  return jerry_return (vm_run_global (bytecode_data_p));
+  return jerry_return (vm_run_global (ecma_op_function_get_compiled_code (ext_func_p)));
 } /* jerry_run */
 
 /**
@@ -992,7 +992,7 @@ jerry_get_error_type (const jerry_value_t value) /**< api value */
   ecma_object_t *object_p = ecma_get_object_from_value (object);
   ecma_standard_error_t error_type = ecma_get_error_type (object_p);
 
-  return error_type;
+  return (jerry_error_t) error_type;
 } /* jerry_get_error_type */
 
 /**
@@ -1845,11 +1845,12 @@ jerry_delete_property_by_index (const jerry_value_t obj_val, /**< object value *
     return false;
   }
 
-  ecma_string_t str_idx;
-  ecma_init_ecma_string_from_uint32 (&str_idx, index);
+  ecma_string_t *str_idx_p = ecma_new_ecma_string_from_uint32 (index);
   ecma_value_t ret_value = ecma_op_object_delete (ecma_get_object_from_value (obj_value),
-                                                  &str_idx,
+                                                  str_idx_p,
                                                   false);
+  ecma_deref_ecma_string (str_idx_p);
+
   return ecma_is_value_true (ret_value);
 } /* jerry_delete_property_by_index */
 
@@ -1904,9 +1905,9 @@ jerry_get_property_by_index (const jerry_value_t obj_val, /**< object value */
     return jerry_throw (ecma_raise_type_error (ECMA_ERR_MSG (wrong_args_msg_p)));
   }
 
-  ecma_string_t str_idx;
-  ecma_init_ecma_string_from_uint32 (&str_idx, index);
-  ecma_value_t ret_value = ecma_op_object_get (ecma_get_object_from_value (obj_value), &str_idx);
+  ecma_string_t *str_idx_p = ecma_new_ecma_string_from_uint32 (index);
+  ecma_value_t ret_value = ecma_op_object_get (ecma_get_object_from_value (obj_value), str_idx_p);
+  ecma_deref_ecma_string (str_idx_p);
 
   return jerry_return (ret_value);
 } /* jerry_get_property_by_index */
@@ -2460,6 +2461,70 @@ jerry_set_object_native_handle (const jerry_value_t obj_val, /**< object to set 
                                         (void *) (ecma_external_pointer_t) freecb_p);
   }
 } /* jerry_set_object_native_handle */
+
+/**
+ * Traverse objects.
+ *
+ * @return true - traversal was interrupted by the callback.
+ *         false - otherwise - traversal visited all objects.
+ */
+bool jerry_objects_foreach (jerry_objects_foreach_t foreach_p,
+                            void *user_data_p)
+{
+  jerry_assert_api_available ();
+
+  JERRY_ASSERT (foreach_p != NULL);
+
+  for (ecma_object_t *iter_p = JERRY_CONTEXT (ecma_gc_objects_p);
+       iter_p != NULL;
+       iter_p = ECMA_GET_POINTER (ecma_object_t, iter_p->gc_next_cp))
+  {
+    if (!ecma_is_lexical_environment (iter_p)
+        && !foreach_p (ecma_make_object_value (iter_p), user_data_p))
+    {
+      return true;
+    }
+  }
+
+  return false;
+} /* jerry_objects_foreach */
+
+/**
+ * Traverse objects having a given native type info.
+ *
+ * @return true - traversal was interrupted by the callback.
+ *         false - otherwise - traversal visited all objects.
+ */
+bool
+jerry_objects_foreach_by_native_info (const jerry_object_native_info_t *native_info_p,
+                                      jerry_objects_foreach_by_native_info_t foreach_p,
+                                      void *user_data_p)
+{
+  jerry_assert_api_available ();
+
+  JERRY_ASSERT (native_info_p != NULL);
+  JERRY_ASSERT (foreach_p != NULL);
+
+  ecma_native_pointer_t *native_pointer_p;
+
+  for (ecma_object_t *iter_p = JERRY_CONTEXT (ecma_gc_objects_p);
+       iter_p != NULL;
+       iter_p = ECMA_GET_POINTER (ecma_object_t, iter_p->gc_next_cp))
+  {
+    if (!ecma_is_lexical_environment (iter_p))
+    {
+      native_pointer_p = ecma_get_native_pointer_value (iter_p, LIT_INTERNAL_MAGIC_STRING_NATIVE_POINTER);
+      if (native_pointer_p
+          && ((const jerry_object_native_info_t *) native_pointer_p->u.info_p) == native_info_p
+          && !foreach_p (ecma_make_object_value (iter_p), native_pointer_p->data_p, user_data_p))
+      {
+        return true;
+      }
+    }
+  }
+
+  return false;
+} /* jerry_objects_foreach_by_native_info */
 
 /**
  * Get native pointer and its type information, associated with specified object.

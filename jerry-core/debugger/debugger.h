@@ -26,7 +26,7 @@
 /**
  * JerryScript debugger protocol version.
  */
-#define JERRY_DEBUGGER_VERSION (1)
+#define JERRY_DEBUGGER_VERSION (2)
 
 /**
  * Frequency of calling jerry_debugger_receive() by the VM.
@@ -90,7 +90,7 @@ typedef enum
 {
   JERRY_DEBUGGER_CONNECTED = 1u << 0, /**< debugger is connected */
   JERRY_DEBUGGER_BREAKPOINT_MODE = 1u << 1, /**< debugger waiting at a breakpoint */
-  JERRY_DEBUGGER_VM_STOP = 1u << 2, /**< stop at the next breakpoint regardless it is enabled */
+  JERRY_DEBUGGER_VM_STOP = 1u << 2, /**< stop at the next breakpoint even if disabled */
   JERRY_DEBUGGER_VM_IGNORE = 1u << 3, /**< ignore all breakpoints */
   JERRY_DEBUGGER_VM_IGNORE_EXCEPTION = 1u << 4, /**< debugger stop at an exception */
   JERRY_DEBUGGER_PARSER_WAIT = 1u << 5, /**< debugger should wait after parsing is completed */
@@ -142,7 +142,7 @@ typedef enum
   JERRY_DEBUGGER_WAITING_AFTER_PARSE = 13, /**< engine waiting for a parser resume */
   /* These messages are generic messages. */
   JERRY_DEBUGGER_RELEASE_BYTE_CODE_CP = 14, /**< invalidate byte code compressed pointer */
-  JERRY_DEBUGGER_MEMSTATS_RECEIVE = 15, /**< memstats sent to the client*/
+  JERRY_DEBUGGER_MEMSTATS_RECEIVE = 15, /**< memstats sent to the client */
   JERRY_DEBUGGER_BREAKPOINT_HIT = 16, /**< notify breakpoint hit */
   JERRY_DEBUGGER_EXCEPTION_HIT = 17, /**< notify exception hit */
   JERRY_DEBUGGER_EXCEPTION_STR = 18, /**< exception string fragment */
@@ -151,7 +151,7 @@ typedef enum
   JERRY_DEBUGGER_BACKTRACE_END = 21, /**< last backtrace data */
   JERRY_DEBUGGER_EVAL_RESULT = 22, /**< eval result */
   JERRY_DEBUGGER_EVAL_RESULT_END = 23, /**< last part of eval result */
-  JERRY_DEBUGGER_WAIT_FOR_SOURCE = 24, /**< engine waiting for a source code */
+  JERRY_DEBUGGER_WAIT_FOR_SOURCE = 24, /**< engine waiting for source code */
   JERRY_DEBUGGER_OUTPUT_RESULT = 25, /**< output sent by the program to the debugger */
   JERRY_DEBUGGER_OUTPUT_RESULT_END = 26, /**< last output result data */
 
@@ -178,11 +178,12 @@ typedef enum
   JERRY_DEBUGGER_CONTINUE = 12, /**< continue execution */
   JERRY_DEBUGGER_STEP = 13, /**< next breakpoint, step into functions */
   JERRY_DEBUGGER_NEXT = 14, /**< next breakpoint in the same context */
+  JERRY_DEBUGGER_FINISH = 15, /**< Continue running just after the function in the current stack frame returns */
   /* The following messages are only available in breakpoint
    * mode and this mode is kept after the message is processed. */
-  JERRY_DEBUGGER_GET_BACKTRACE = 15, /**< get backtrace */
-  JERRY_DEBUGGER_EVAL = 16, /**< first message of evaluating a string */
-  JERRY_DEBUGGER_EVAL_PART = 17, /**< next message of evaluating a string */
+  JERRY_DEBUGGER_GET_BACKTRACE = 16, /**< get backtrace */
+  JERRY_DEBUGGER_EVAL = 17, /**< first message of evaluating a string */
+  JERRY_DEBUGGER_EVAL_PART = 18, /**< next message of evaluating a string */
 
   JERRY_DEBUGGER_MESSAGES_IN_MAX_COUNT, /**< number of different type of input messages */
 } jerry_debugger_header_type_t;
@@ -193,7 +194,7 @@ typedef enum
 typedef enum
 {
   JERRY_DEBUGGER_EVAL_OK = 1, /**< eval result, no error */
-  JERRY_DEBUGGER_EVAL_ERROR = 2, /**< eval result when an error is occured */
+  JERRY_DEBUGGER_EVAL_ERROR = 2, /**< eval result when an error has occurred */
 } jerry_debugger_eval_subtype_t;
 
 /**

@@ -50,6 +50,13 @@
  */
 #define ECMA_SET_POINTER(field, non_compressed_pointer) JMEM_CP_SET_POINTER (field, non_compressed_pointer)
 
+typedef enum
+{
+  ECMA_STRING_FLAG_EMPTY = 0,
+  ECMA_STRING_FLAG_IS_ASCII,
+  ECMA_STRING_FLAG_MUST_BE_FREED
+} ecma_string_flag_t;
+
 /**
  * Convert ecma-string's contents to a cesu-8 string and put it into a buffer.
  */
@@ -57,14 +64,18 @@
                                    utf8_ptr, /**< [out] output buffer pointer */ \
                                    utf8_str_size) /**< [out] output buffer size */ \
   lit_utf8_size_t utf8_str_size; \
-  const lit_utf8_byte_t *utf8_ptr = ecma_string_get_chars (ecma_str_ptr, &utf8_str_size, NULL); \
-  bool utf8_ptr ## must_be_freed = false; \
-  \
-  if (utf8_ptr == NULL) \
+  uint8_t utf8_ptr ## flags = ECMA_STRING_FLAG_EMPTY; \
+  const lit_utf8_byte_t *utf8_ptr = ecma_string_get_chars (ecma_str_ptr, &utf8_str_size, &utf8_ptr ## flags);
+
+/**
+ * Free the cesu-8 string buffer allocated by 'ECMA_STRING_TO_UTF8_STRING'
+ */
+#define ECMA_FINALIZE_UTF8_STRING(utf8_ptr, /**< pointer to character buffer */ \
+                                  utf8_str_size) /**< buffer size */ \
+  if (utf8_ptr ## flags & ECMA_STRING_FLAG_MUST_BE_FREED) \
   { \
-    utf8_ptr = (const lit_utf8_byte_t *) jmem_heap_alloc_block (utf8_str_size); \
-    ecma_string_to_utf8_bytes (ecma_str_ptr, (lit_utf8_byte_t *) utf8_ptr, utf8_str_size); \
-    utf8_ptr ## must_be_freed = true; \
+    JERRY_ASSERT (utf8_ptr != NULL); \
+    jmem_heap_free_block ((void *) utf8_ptr, utf8_str_size); \
   }
 
 #ifdef ECMA_VALUE_CAN_STORE_UINTPTR_VALUE_DIRECTLY
@@ -122,17 +133,6 @@
 #endif /* ECMA_VALUE_CAN_STORE_UINTPTR_VALUE_DIRECTLY */
 
 /**
- * Free the cesu-8 string buffer allocated by 'ECMA_STRING_TO_UTF8_STRING'
- */
-#define ECMA_FINALIZE_UTF8_STRING(utf8_ptr, /**< pointer to character buffer */ \
-                                  utf8_str_size) /**< buffer size */ \
-  if (utf8_ptr ## must_be_freed) \
-  { \
-    JERRY_ASSERT (utf8_ptr != NULL); \
-    jmem_heap_free_block ((void *) utf8_ptr, utf8_str_size); \
-  }
-
-/**
  * Convert boolean to bitfield value.
  */
 #define ECMA_BOOL_TO_BITFIELD(x) ((x) ? 1 : 0)
@@ -154,6 +154,7 @@ bool ecma_are_values_integer_numbers (ecma_value_t first_value, ecma_value_t sec
 bool ecma_is_value_float_number (ecma_value_t value) __attr_const___;
 bool ecma_is_value_number (ecma_value_t value) __attr_const___;
 bool ecma_is_value_string (ecma_value_t value) __attr_const___;
+bool ecma_is_value_direct_string (ecma_value_t value) __attr_const___;
 bool ecma_is_value_object (ecma_value_t value) __attr_const___;
 bool ecma_is_value_error_reference (ecma_value_t value) __attr_const___;
 bool ecma_is_value_collection_chunk (ecma_value_t value) __attr_const___;
@@ -167,6 +168,7 @@ ecma_value_t ecma_make_number_value (ecma_number_t ecma_number);
 ecma_value_t ecma_make_int32_value (int32_t int32_number);
 ecma_value_t ecma_make_uint32_value (uint32_t uint32_number);
 ecma_value_t ecma_make_string_value (const ecma_string_t *ecma_string_p) __attr_pure___;
+ecma_value_t ecma_make_magic_string_value (lit_magic_string_id_t id) __attr_pure___;
 ecma_value_t ecma_make_object_value (const ecma_object_t *object_p) __attr_pure___;
 ecma_value_t ecma_make_error_reference_value (const ecma_error_reference_t *error_ref_p) __attr_pure___;
 ecma_value_t ecma_make_collection_chunk_value (const ecma_collection_chunk_t *collection_chunk_p) __attr_pure___;
@@ -195,10 +197,10 @@ ecma_string_t *ecma_new_ecma_string_from_utf8_converted_to_cesu8 (const lit_utf8
                                                                   lit_utf8_size_t string_size);
 ecma_string_t *ecma_new_ecma_string_from_code_unit (ecma_char_t code_unit);
 ecma_string_t *ecma_new_ecma_string_from_uint32 (uint32_t uint32_number);
+ecma_string_t *ecma_get_ecma_string_from_uint32 (uint32_t uint32_number);
 ecma_string_t *ecma_new_ecma_string_from_number (ecma_number_t num);
-ecma_string_t *ecma_new_ecma_string_from_magic_string_id (lit_magic_string_id_t id);
+ecma_string_t *ecma_get_magic_string (lit_magic_string_id_t id);
 ecma_string_t *ecma_new_ecma_string_from_magic_string_ex_id (lit_magic_string_ex_id_t id);
-ecma_string_t *ecma_new_ecma_length_string (void);
 ecma_string_t *ecma_append_chars_to_string (ecma_string_t *string1_p,
                                             const lit_utf8_byte_t *cesu8_string2_p,
                                             lit_utf8_size_t cesu8_string2_size,
@@ -232,9 +234,7 @@ ecma_substring_copy_to_utf8_buffer (const ecma_string_t *string_desc_p,
                                     lit_utf8_size_t buffer_size);
 void ecma_string_to_utf8_bytes (const ecma_string_t *string_desc_p, lit_utf8_byte_t *buffer_p,
                                 lit_utf8_size_t buffer_size);
-const lit_utf8_byte_t *ecma_string_get_chars (const ecma_string_t *string_p, lit_utf8_size_t *size_p, bool *is_ascii_p);
-void ecma_init_ecma_string_from_uint32 (ecma_string_t *string_desc_p, uint32_t uint32_number);
-void ecma_init_ecma_magic_string (ecma_string_t *string_desc_p, lit_magic_string_id_t id);
+const lit_utf8_byte_t *ecma_string_get_chars (const ecma_string_t *string_p, lit_utf8_size_t *size_p, uint8_t *flags_p);
 bool ecma_compare_ecma_string_to_magic_id (const ecma_string_t *string_p, lit_magic_string_id_t id);
 bool ecma_string_is_empty (const ecma_string_t *string_p);
 bool ecma_string_is_length (const ecma_string_t *string_p);
@@ -247,6 +247,7 @@ bool ecma_string_compare_to_property_name (ecma_property_t property, jmem_cpoint
                                            const ecma_string_t *string_p);
 
 bool ecma_compare_ecma_strings (const ecma_string_t *string1_p, const ecma_string_t *string2_p);
+bool ecma_compare_ecma_non_direct_strings (const ecma_string_t *string1_p, const ecma_string_t *string2_p);
 bool ecma_compare_ecma_strings_relational (const ecma_string_t *string1_p, const ecma_string_t *string2_p);
 ecma_length_t ecma_string_get_length (const ecma_string_t *string_p);
 ecma_length_t ecma_string_get_utf8_length (const ecma_string_t *string_p);
@@ -254,8 +255,6 @@ lit_utf8_size_t ecma_string_get_size (const ecma_string_t *string_p);
 lit_utf8_size_t ecma_string_get_utf8_size (const ecma_string_t *string_p);
 ecma_char_t ecma_string_get_char_at_pos (const ecma_string_t *string_p, ecma_length_t index);
 
-ecma_string_t *ecma_get_magic_string (lit_magic_string_id_t id);
-ecma_string_t *ecma_get_magic_string_ex (lit_magic_string_ex_id_t id);
 lit_magic_string_id_t ecma_get_string_magic (const ecma_string_t *string_p);
 
 lit_string_hash_t ecma_string_hash (const ecma_string_t *string_p);
