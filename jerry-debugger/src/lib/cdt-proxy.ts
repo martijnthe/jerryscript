@@ -84,7 +84,7 @@ export class ChromeDevToolsProxyServer {
     const rpcServer = new rpc.Server(wss);
     this.api = rpcServer.api();
 
-    wss.on('connection', function connection(ws, req) {
+    wss.on('connection', (ws, req) => {
       const ip = req.connection.remoteAddress;
       console.log(`connection from: ${ip}`);
     });
@@ -165,7 +165,7 @@ export class ChromeDevToolsProxyServer {
     let name = script.name;
     if (!name) {
       // FIXME: make file / module name available to use here
-      name = 'untitled' + this.lastRuntimeScript++;
+      name = `untitled${this.lastRuntimeScript++}`;
     }
     this.api.Debugger.emitScriptParsed({
       scriptId: String(script.id),

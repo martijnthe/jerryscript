@@ -44,15 +44,14 @@ export class Breakpoint {
   }
 
   toString() {
-    let result = this.func.sourceName || '<unknown>';
+    const sourceName = this.func.sourceName || '<unknown>';
 
-    result += ':' + this.line;
-
+    let detail = '';
     if (this.func.isFunc) {
-      result += ` (in ${this.func.name || 'function'}() at line:${this.func.line}, col:${this.func.column})`;
+      detail = ` (in ${this.func.name || 'function'}() at line:${this.func.line}, col:${this.func.column})`;
     }
 
-    return result;
+    return `${sourceName}:${this.line}${detail}`;
   }
 }
 
