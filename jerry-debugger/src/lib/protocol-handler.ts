@@ -147,7 +147,7 @@ export class JerryDebugProtocolHandler {
   }
 
   stepOut() {
-    console.log('step out not yet supported in JerryScript');
+    this.resumeExec(SP.JERRY_DEBUGGER_FINISH);
   }
 
   pause() {

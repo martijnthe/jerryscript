@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { JerryDebugProtocolHandler } from '../protocol-handler';
 import * as SP from '../jrs-protocol-constants';
+import { Breakpoint } from '../breakpoint';
+import { JerryDebugProtocolHandler } from '../protocol-handler';
 
 // utility function
 function encodeArray(byte: number, str: string) {
@@ -42,25 +43,25 @@ describe('onConfiguration', () => {
   });
 
   it('allows otherwise valid message to be too long', () => {
-    const array = Uint8Array.from([0, 200, 4, 1, 1, 0]);
+    const array = Uint8Array.from([0, 200, 4, 1, 2, 0]);
     handler.onConfiguration(array);
     expect(delegate.onError).toHaveBeenCalledTimes(0);
   });
 
   it('aborts when compressed pointer wrong size', () => {
-    const array = Uint8Array.from([0, 200, 6, 1, 1]);
+    const array = Uint8Array.from([0, 200, 6, 1, 2]);
     handler.onConfiguration(array);
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 
   it('aborts when version unexpected', () => {
-    const array = Uint8Array.from([0, 200, 4, 1, 2]);
+    const array = Uint8Array.from([0, 200, 4, 1, 3]);
     handler.onConfiguration(array);
     expect(delegate.onError).toHaveBeenCalledTimes(1);
   });
 
   it('succeeds when everything is normal', () => {
-    const array = Uint8Array.from([0, 200, 4, 1, 1]);
+    const array = Uint8Array.from([0, 200, 4, 1, 2]);
     handler.onConfiguration(array);
     expect(delegate.onError).toHaveBeenCalledTimes(0);
   });
@@ -273,7 +274,7 @@ describe('onMessage', () => {
   });
 
   it('aborts when unhandled message sent', () => {
-    const array = Uint8Array.from([SP.JERRY_DEBUGGER_CONFIGURATION, 200, 4, 1, 1]);
+    const array = Uint8Array.from([SP.JERRY_DEBUGGER_CONFIGURATION, 200, 4, 1, 2]);
     handler.onMessage(array);
     expect(delegate.onError).toHaveBeenCalledTimes(0);
     array[0] = 255;
@@ -444,5 +445,36 @@ describe('requestBacktrace', () => {
     expect(debugClient.send).toHaveBeenCalledTimes(0);
     handler.requestBacktrace();
     expect(debugClient.send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('stepping', () => {
+  function setupHaltedProtocolHandler() {
+    const debugClient = {
+      send: jest.fn(),
+    };
+    const handler = new JerryDebugProtocolHandler({});
+    handler.debuggerClient = debugClient as any;
+    // For these tests mock the current breakpoint by setting the private lastBreakpointHit member:
+    (handler as any).lastBreakpointHit = {} as Breakpoint;
+    return { handler, debugClient };
+  }
+
+  it('sends the expected message when calling stepInto()', () => {
+    const { handler, debugClient } = setupHaltedProtocolHandler();
+    handler.stepInto();
+    expect(debugClient.send).toHaveBeenCalledWith(Uint8Array.from([SP.JERRY_DEBUGGER_STEP]));
+  });
+
+  it('sends the expected message when calling stepOut()', () => {
+    const { handler, debugClient } = setupHaltedProtocolHandler();
+    handler.stepOut();
+    expect(debugClient.send).toHaveBeenCalledWith(Uint8Array.from([SP.JERRY_DEBUGGER_FINISH]));
+  });
+
+  it('sends the expected message when calling stepOver()', () => {
+    const { handler, debugClient } = setupHaltedProtocolHandler();
+    handler.stepOver();
+    expect(debugClient.send).toHaveBeenCalledWith(Uint8Array.from([SP.JERRY_DEBUGGER_NEXT]));
   });
 });

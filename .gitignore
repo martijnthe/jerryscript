@@ -43,3 +43,5 @@ docs/doxygen
 # Tests
 tests/test262/
 tests/unit-doc/*.c
+jerry-debugger/src/coverage
+yarn-error.log

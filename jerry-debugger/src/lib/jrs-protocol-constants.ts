@@ -15,7 +15,7 @@
 // TODO: consider generating this file
 
 // expected JerryScript debugger protocol version
-export const JERRY_DEBUGGER_VERSION = 1;
+export const JERRY_DEBUGGER_VERSION = 2;
 
 // server
 export const JERRY_DEBUGGER_CONFIGURATION = 1;
@@ -67,6 +67,7 @@ export const JERRY_DEBUGGER_CONTEXT_RESET = 11;
 export const JERRY_DEBUGGER_CONTINUE = 12;
 export const JERRY_DEBUGGER_STEP = 13;
 export const JERRY_DEBUGGER_NEXT = 14;
-export const JERRY_DEBUGGER_GET_BACKTRACE = 15;
-export const JERRY_DEBUGGER_EVAL = 16;
-export const JERRY_DEBUGGER_EVAL_PART = 17;
+export const JERRY_DEBUGGER_FINISH = 15;
+export const JERRY_DEBUGGER_GET_BACKTRACE = 16;
+export const JERRY_DEBUGGER_EVAL = 17;
+export const JERRY_DEBUGGER_EVAL_PART = 18;
