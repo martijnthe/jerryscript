@@ -46,7 +46,7 @@ export function onHttpRequest(this: ChromeDevToolsProxyServer,
     case 'list':
       const urlFrag = `${this.host}:${this.port}/${this.uuid}`;
       // FIXME: linux-specific now: this should be a file:// URL to the jsfile
-      const fileUrl = 'file://' + path.resolve(this.jsfile);
+      const fileUrl = `file://${path.resolve(this.jsfile)}`;
       result = [{
         'description': 'JerryScript debugger',
         'devtoolsFrontendUrl': `https://chrome-devtools-frontend.appspot.com/serve_file/' +
@@ -59,7 +59,7 @@ export function onHttpRequest(this: ChromeDevToolsProxyServer,
       }];
       break;
     default:
-      console.log('Warning: unhandled URL: ' + url);
+      console.log(`Warning: unhandled URL: ${url}`);
       response.statusCode = 404;
       break;
   }

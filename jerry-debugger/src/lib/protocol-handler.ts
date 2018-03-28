@@ -205,8 +205,7 @@ export class JerryDebugProtocolHandler {
     }
 
     if (this.version !== SP.JERRY_DEBUGGER_VERSION) {
-      this.abort('incorrect target debugger version detected: ' + this.version
-                 + ' expected: ' + SP.JERRY_DEBUGGER_VERSION);
+      this.abort(`incorrect target debugger version detected: ${this.version} expected: ${SP.JERRY_DEBUGGER_VERSION}`);
     }
   }
 
@@ -401,7 +400,7 @@ export class JerryDebugProtocolHandler {
 
     let breakpointInfo = '';
     if (breakpoint.activeIndex >= 0) {
-      breakpointInfo = 'breakpoint:' + breakpoint.activeIndex + ' ';
+      breakpointInfo = `breakpoint:${breakpoint.activeIndex} `;
     }
 
     const atAround = breakpointRef.exact ? 'at' : 'around';
@@ -444,7 +443,7 @@ export class JerryDebugProtocolHandler {
     if (handler) {
       handler.call(this, message);
     } else {
-      this.abort('unhandled protocol message type: ' + message[0]);
+      this.abort(`unhandled protocol message type: ${message[0]}`);
     }
   }
 
@@ -473,7 +472,7 @@ export class JerryDebugProtocolHandler {
     }
     const lineList = this.lineLists[scriptId];
     if (!lineList[line]) {
-      throw new Error('no breakpoint found for line: ' + line);
+      throw new Error(`no breakpoint found for line: ${line}`);
     }
     for (const func of lineList[line]) {
       const breakpoint = func.lines[line];
