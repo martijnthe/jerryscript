@@ -183,7 +183,7 @@ describe('onSourceCodeName', () => {
 });
 
 describe('releaseFunction', () => {
-  it('', () => {
+  it('updates functions, lineLists, and activeBreakpoints', () => {
     const byteCodeCP = 0;
     const func = {
       scriptId: 7,
