@@ -96,7 +96,6 @@ export class JerryDebugProtocolHandler {
   private sourceNameData?: Uint8Array;
   private functionName?: string;
   private functionNameData?: Uint8Array;
-  private evalResult?: string;
   private evalResultData?: Uint8Array;
   private functions: FunctionMap = {};
   private newFunctions: FunctionMap = {};
@@ -108,7 +107,6 @@ export class JerryDebugProtocolHandler {
   private evalsPending: number = 0;
   private lastBreakpointHit?: Breakpoint;
   private lastBreakpointExact: boolean = true;
-  private lastBacktrace?: Array<Breakpoint>;
   private activeBreakpoints: Array<Breakpoint> = [];
   private nextBreakpointIndex: number = 0;
 
@@ -143,10 +141,7 @@ export class JerryDebugProtocolHandler {
 
   // FIXME: this lets test suite run for now
   unused() {
-    this.maxMessageSize;
     this.lastBreakpointExact;
-    this.lastBacktrace;
-    this.evalResult;
   }
 
   stepOver() {
@@ -483,7 +478,6 @@ export class JerryDebugProtocolHandler {
       if (this.delegate.onBacktrace) {
         this.delegate.onBacktrace(this.backtrace);
       }
-      this.lastBacktrace = this.backtrace;
       this.backtrace = [];
     }
   }
@@ -632,7 +626,6 @@ export class JerryDebugProtocolHandler {
       throw new Error('attempted resume while not at breakpoint');
     }
     this.lastBreakpointHit = undefined;
-    this.lastBacktrace = undefined;
     this.debuggerClient!.send(encodeMessage(this.byteConfig, 'B', [code]));
     if (this.delegate.onResume) {
       this.delegate.onResume();
