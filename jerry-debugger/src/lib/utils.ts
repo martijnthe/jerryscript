@@ -231,6 +231,45 @@ export function cesu8ToString(array: Uint8Array | undefined) {
   return result;
 }
 
+/**
+ * Convert a string to Uint8Array buffer in cesu8 format, with optional left padding
+ *
+ * @param str String to convert
+ * @param offset Optional number of padding bytes to allocate at the beginning
+ */
+export function stringToCesu8(str: string, offset: number = 0) {
+  const length = str.length;
+  let byteLength = length;
+  for (let i = 0; i < length; i++) {
+    const chr = str.charCodeAt(i);
+
+    if (chr > 0x7ff) {
+      byteLength++;
+    }
+
+    if (chr >= 0x7f) {
+      byteLength++;
+    }
+  }
+
+  const result = new Uint8Array(offset + byteLength);
+  for (let i = 0; i < length; i++) {
+    const chr = str.charCodeAt(i);
+
+    if (chr > 0x7ff) {
+      result[offset++] = 0xe0 | (chr >> 12);
+      result[offset++] = 0x80 | ((chr >> 6) & 0x3f);
+      result[offset++] = 0x80 | (chr & 0x3f);
+    } else if (chr >= 0x7f) {
+      result[offset++] = 0xc0 | (chr >> 6);
+      result[offset++] = 0x80 | (chr & 0x3f);
+    } else {
+      result[offset++] = chr;
+    }
+  }
+  return result;
+}
+
 // Concat the two arrays. The first byte (opcode) of nextArray is ignored.
 export function assembleUint8Arrays(baseArray: Uint8Array | undefined, nextArray: Uint8Array) {
   if (!baseArray) {

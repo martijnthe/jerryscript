@@ -26,6 +26,17 @@ function encodeArray(byte: number, str: string) {
   return array;
 }
 
+function setupHaltedProtocolHandler() {
+  const debugClient = {
+    send: jest.fn(),
+  };
+  const handler = new JerryDebugProtocolHandler({});
+  handler.debuggerClient = debugClient as any;
+  // For these tests mock the current breakpoint by setting the private lastBreakpointHit member:
+  (handler as any).lastBreakpointHit = {} as Breakpoint;
+  return { handler, debugClient };
+}
+
 describe('onConfiguration', () => {
   const delegate = {
     onError: jest.fn(),
@@ -171,6 +182,30 @@ describe('onSourceCodeName', () => {
   });
 });
 
+describe('releaseFunction', () => {
+  it('', () => {
+    const byteCodeCP = 0;
+    const func = {
+      scriptId: 7,
+      lines: [
+        { activeIndex: 3 },
+        { activeIndex: -1 },
+        { activeIndex: -1 },
+      ],
+    };
+    const handler = new JerryDebugProtocolHandler({});
+    (handler as any).functions = [ func ];
+    (handler as any).lineLists = {
+      7: [[func], ['a', func], [func, 'b']],
+    };
+    (handler as any).activeBreakpoints = [1, 2, 3, 4, 5];
+    handler.releaseFunction(byteCodeCP);
+    expect((handler as any).activeBreakpoints[3]).toEqual(undefined);
+    expect((handler as any).functions[byteCodeCP]).toEqual(undefined);
+    expect((handler as any).lineLists[7]).toEqual([ [], [ 'a' ], [ 'b' ] ]);
+  });
+});
+
 describe('onBreakpointHit', () => {
   it('calls delegate function if available', () => {
     const delegate = {
@@ -252,6 +287,42 @@ describe('onBacktrace', () => {
   });
 });
 
+describe('onEvalResult', () => {
+  it('handles a single END packet', () => {
+    const delegate = {
+      onEvalResult: jest.fn(),
+    };
+    const handler = new JerryDebugProtocolHandler(delegate);
+    (handler as any).evalResultData = undefined;
+    (handler as any).evalsPending = 1;
+    handler.onEvalResult(Uint8Array.from([SP.JERRY_DEBUGGER_EVAL_RESULT_END,
+      'a'.charCodeAt(0), 'b'.charCodeAt(0), SP.JERRY_DEBUGGER_EVAL_OK]));
+    expect(delegate.onEvalResult).toHaveBeenCalledTimes(1);
+    expect(delegate.onEvalResult.mock.calls[0][0]).toEqual(SP.JERRY_DEBUGGER_EVAL_OK);
+    expect(delegate.onEvalResult.mock.calls[0][1]).toEqual('ab');
+    expect((handler as any).evalResultData).toEqual(undefined);
+    expect((handler as any).evalsPending).toEqual(0);
+  });
+
+  it('handles a partial packet plus an END packet', () => {
+    const delegate = {
+      onEvalResult: jest.fn(),
+    };
+    const handler = new JerryDebugProtocolHandler(delegate);
+    (handler as any).evalResultData = undefined;
+    (handler as any).evalsPending = 1;
+    handler.onEvalResult(Uint8Array.from([SP.JERRY_DEBUGGER_EVAL_RESULT,
+      'a'.charCodeAt(0), 'b'.charCodeAt(0)]));
+    handler.onEvalResult(Uint8Array.from([SP.JERRY_DEBUGGER_EVAL_RESULT_END,
+      'a'.charCodeAt(0), 'b'.charCodeAt(0), SP.JERRY_DEBUGGER_EVAL_OK]));
+    expect(delegate.onEvalResult).toHaveBeenCalledTimes(1);
+    expect(delegate.onEvalResult.mock.calls[0][0]).toEqual(SP.JERRY_DEBUGGER_EVAL_OK);
+    expect(delegate.onEvalResult.mock.calls[0][1]).toEqual('abab');
+    expect((handler as any).evalResultData).toEqual(undefined);
+    expect((handler as any).evalsPending).toEqual(0);
+  });
+});
+
 describe('onMessage', () => {
   const delegate = {
     onError: jest.fn(),
@@ -308,6 +379,56 @@ describe('getScriptIdByName', () => {
 
     // script IDs are 1-indexed
     expect(handler.getScriptIdByName('mozzarella')).toEqual(1);
+  });
+});
+
+describe('evaluate', () => {
+  it('stores expression in queue if not at breakpoint', () => {
+    const handler = new JerryDebugProtocolHandler({});
+    (handler as any).evalQueue = [];
+    handler.evaluate('foo');
+    expect((handler as any).evalQueue).toEqual(['foo']);
+  });
+
+  it('sends single eval packet for short expressions', () => {
+    const debugClient = {
+      send: jest.fn(),
+    };
+    const handler = new JerryDebugProtocolHandler({});
+    (handler as any).lastBreakpointHit = true;
+    (handler as any).byteConfig = {
+      littleEndian: true,
+    };
+    (handler as any).maxMessageSize = 16;
+    (handler as any).debuggerClient = debugClient;
+    handler.evaluate('foo');
+    expect(debugClient.send).toHaveBeenCalledTimes(1);
+    expect(debugClient.send.mock.calls[0][0]).toEqual(Uint8Array.from([
+      SP.JERRY_DEBUGGER_EVAL, 3, 0, 0, 0,
+      'f'.charCodeAt(0), 'o'.charCodeAt(0), 'o'.charCodeAt(0),
+    ]));
+  });
+
+  it('sends two eval packets for longer expression', () => {
+    const debugClient = {
+      send: jest.fn(),
+    };
+    const handler = new JerryDebugProtocolHandler({});
+    (handler as any).lastBreakpointHit = true;
+    (handler as any).byteConfig = {
+      littleEndian: true,
+    };
+    (handler as any).maxMessageSize = 6;
+    (handler as any).debuggerClient = debugClient;
+    handler.evaluate('foobar');
+    expect(debugClient.send).toHaveBeenCalledTimes(2);
+    expect(debugClient.send.mock.calls[0][0]).toEqual(Uint8Array.from([
+      SP.JERRY_DEBUGGER_EVAL, 6, 0, 0, 0, 'f'.charCodeAt(0),
+    ]));
+    expect(debugClient.send.mock.calls[1][0]).toEqual(Uint8Array.from([
+      SP.JERRY_DEBUGGER_EVAL_PART, 'o'.charCodeAt(0), 'o'.charCodeAt(0),
+      'b'.charCodeAt(0), 'a'.charCodeAt(0), 'r'.charCodeAt(0),
+    ]));
   });
 });
 
@@ -449,17 +570,6 @@ describe('requestBacktrace', () => {
 });
 
 describe('stepping', () => {
-  function setupHaltedProtocolHandler() {
-    const debugClient = {
-      send: jest.fn(),
-    };
-    const handler = new JerryDebugProtocolHandler({});
-    handler.debuggerClient = debugClient as any;
-    // For these tests mock the current breakpoint by setting the private lastBreakpointHit member:
-    (handler as any).lastBreakpointHit = {} as Breakpoint;
-    return { handler, debugClient };
-  }
-
   it('sends the expected message when calling stepInto()', () => {
     const { handler, debugClient } = setupHaltedProtocolHandler();
     handler.stepInto();
@@ -476,5 +586,32 @@ describe('stepping', () => {
     const { handler, debugClient } = setupHaltedProtocolHandler();
     handler.stepOver();
     expect(debugClient.send).toHaveBeenCalledWith(Uint8Array.from([SP.JERRY_DEBUGGER_NEXT]));
+  });
+});
+
+describe('logPacket', () => {
+  it('prints packet name in brackets without second arg', () => {
+    const spy = jest.spyOn(console, 'log');
+    const handler = new JerryDebugProtocolHandler({});
+    handler.logPacket('foo');
+    expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls[0][0]).toEqual('[foo]');
+  });
+
+  it('prints packet name in brackets with second arg false', () => {
+    const spy = jest.spyOn(console, 'log');
+    const handler = new JerryDebugProtocolHandler({});
+    handler.logPacket('foo', false);
+    expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls[0][0]).toEqual('[foo]');
+  });
+
+  it('prints packet name in brackets with second arg true', () => {
+    const spy = jest.spyOn(console, 'log');
+    const handler = new JerryDebugProtocolHandler({});
+    (handler as any).evalsPending = 1;
+    handler.logPacket('foo', true);
+    expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls[0][0]).toEqual('[Ignored: foo]');
   });
 });

@@ -17,10 +17,16 @@ import Crdp from 'chrome-remote-debug-protocol';
 import { Breakpoint } from './breakpoint';
 import { JerryDebugProtocolHandler, JerryMessageScriptParsed, JerryMessageBreakpointHit } from './protocol-handler';
 import { ChromeDevToolsProxyServer } from './cdt-proxy';
+import { JERRY_DEBUGGER_EVAL_OK } from './jrs-protocol-constants';
 
 export interface JerryDebuggerDelegate {
   onScriptParsed?(message: JerryMessageScriptParsed): void;
   onBreakpointHit?(message: JerryMessageBreakpointHit): void;
+}
+
+interface PromiseFunctions {
+  resolve: Function;
+  reject: Function;
 }
 
 export class CDTController {
@@ -31,6 +37,8 @@ export class CDTController {
   public proxyServer?: ChromeDevToolsProxyServer;
   private scripts: Array<JerryMessageScriptParsed> = [];
   private pendingBreakpoint?: Breakpoint;
+  // stores resolve and reject functions from promised evaluations
+  private evalResolvers: Array<PromiseFunctions> = [];
 
   // FIXME: this lets test suite run for now
   unused() {
@@ -61,6 +69,28 @@ export class CDTController {
   onBacktrace(backtrace: Array<Breakpoint>) {
     this.sendPaused(this.pendingBreakpoint, backtrace);
     this.pendingBreakpoint = undefined;
+  }
+
+  onEvalResult(subType: number, result: string) {
+    if (this.evalResolvers.length === 0) {
+      throw new Error('eval result received with none pending');
+    }
+
+    const functions = this.evalResolvers.shift();
+    const remoteObject: Crdp.Runtime.RemoteObject = {
+      type: 'string',
+      value: result,
+    };
+    if (subType === JERRY_DEBUGGER_EVAL_OK) {
+      functions!.resolve({
+        result: remoteObject,
+      });
+    } else {
+      functions!.reject({
+        result: remoteObject,
+        // FIXME: provide exceptionDetails
+      });
+    }
   }
 
   onResume() {
@@ -119,6 +149,21 @@ export class CDTController {
   }
 
   // 'cmd' functions are commands from CDT to Debugger
+  cmdEvaluate(request: Crdp.Runtime.EvaluateRequest): Promise<Crdp.Runtime.EvaluateResponse> {
+    this.protocolHandler!.evaluate(request.expression);
+    return new Promise((resolve, reject) => {
+      this.evalResolvers.push({ resolve, reject });
+    });
+  }
+
+  cmdEvaluateOnCallFrame(request: Crdp.Debugger.EvaluateOnCallFrameRequest): Promise<Crdp.Runtime.EvaluateResponse> {
+    // FIXME: actually evaluate on call frame someday
+    this.protocolHandler!.evaluate(request.expression);
+    return new Promise((resolve, reject) => {
+      this.evalResolvers.push({ resolve, reject });
+    });
+  }
+
   cmdPause() {
     this.protocolHandler!.pause();
   }

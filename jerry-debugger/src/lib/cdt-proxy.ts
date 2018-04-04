@@ -30,6 +30,10 @@ export interface CDTDelegate {
     Promise<Crdp.Debugger.GetPossibleBreakpointsResponse>;
   requestScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) =>
     Promise<Crdp.Debugger.GetScriptSourceResponse>;
+  cmdEvaluate: (request: Crdp.Runtime.EvaluateRequest) =>
+    Promise<Crdp.Runtime.EvaluateResponse>;
+  cmdEvaluateOnCallFrame: (request: Crdp.Debugger.EvaluateOnCallFrameRequest) =>
+    Promise<Crdp.Debugger.EvaluateOnCallFrameResponse>;
   cmdPause: () => void;
   cmdRemoveBreakpoint: (breakpointId: number) => Promise<void>;
   cmdResume: () => void;
@@ -103,6 +107,7 @@ export class ChromeDevToolsProxyServer {
 
     this.api.Debugger.expose({
       enable: notImplemented,
+      evaluateOnCallFrame: request => this.delegate.cmdEvaluateOnCallFrame(request),
       setSkipAllPauses: async (params) => {
         this.skipAllPauses = params.skip;
       },
@@ -127,6 +132,7 @@ export class ChromeDevToolsProxyServer {
     this.api.Profiler.expose({ enable: notImplemented });
     this.api.Runtime.expose({
       enable: notImplemented,
+      evaluate: request => this.delegate.cmdEvaluate(request),
       runIfWaitingForDebugger: async () => {
         // how could i chain this to happen after the enable response goes out?
         this.api.Runtime.emitExecutionContextCreated({

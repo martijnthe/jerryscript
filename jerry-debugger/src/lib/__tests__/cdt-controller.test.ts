@@ -15,6 +15,7 @@
 import { Breakpoint } from '../breakpoint';
 import { CDTController } from '../cdt-controller';
 import { ChromeDevToolsProxyServer } from '../cdt-proxy';
+import { JERRY_DEBUGGER_EVAL_OK, JERRY_DEBUGGER_EVAL_ERROR } from '../jrs-protocol-constants';
 
 describe('onError', () => {
   const spy = jest.spyOn(console, 'log');
@@ -85,6 +86,77 @@ describe('onBreakpointHit', () => {
       exact: false,
     });
     expect(handler.requestBacktrace).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('onEvalResult', () => {
+  const controller = new CDTController();
+  const handler = {
+    evaluate: jest.fn(),
+  };
+  controller.protocolHandler = handler as any;
+
+  beforeEach(() => {
+    controller.proxyServer = undefined;
+    handler.evaluate.mockClear();
+  });
+
+  it('throws if run with no eval pending', () => {
+    expect(() => controller.onEvalResult(JERRY_DEBUGGER_EVAL_OK, 'foo')).toThrow();
+  });
+
+  it('calls resolve for successful eval', () => {
+    const promise = controller.cmdEvaluate({
+      expression: 'valid',
+    });
+    controller.onEvalResult(JERRY_DEBUGGER_EVAL_OK, 'success');
+    return expect(promise).resolves.toEqual({
+      result: {
+        type: 'string',
+        value: 'success',
+      },
+    });
+  });
+
+  it('calls reject for failed eval', () => {
+    const promise = controller.cmdEvaluate({
+      expression: 'invalid',
+    });
+    controller.onEvalResult(JERRY_DEBUGGER_EVAL_ERROR, 'failure');
+    return expect(promise).rejects.toEqual({
+      result: {
+        type: 'string',
+        value: 'failure',
+      },
+    });
+  });
+
+  it('calls resolve for successful eval on call frame', () => {
+    const promise = controller.cmdEvaluateOnCallFrame({
+      callFrameId: '0',
+      expression: 'valid',
+    });
+    controller.onEvalResult(JERRY_DEBUGGER_EVAL_OK, 'success');
+    return expect(promise).resolves.toEqual({
+      result: {
+        type: 'string',
+        value: 'success',
+      },
+    });
+  });
+
+  it('calls reject for failed eval on call frame', () => {
+    const promise = controller.cmdEvaluateOnCallFrame({
+      callFrameId: '0',
+      expression: 'invalid',
+    });
+    controller.onEvalResult(JERRY_DEBUGGER_EVAL_ERROR, 'failure');
+    return expect(promise).rejects.toEqual({
+      result: {
+        type: 'string',
+        value: 'failure',
+      },
+    });
   });
 });
 
