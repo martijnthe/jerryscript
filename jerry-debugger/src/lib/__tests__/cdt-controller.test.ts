@@ -106,32 +106,6 @@ describe('onEvalResult', () => {
   });
 
   it('calls resolve for successful eval', () => {
-    const promise = controller.cmdEvaluate({
-      expression: 'valid',
-    });
-    controller.onEvalResult(JERRY_DEBUGGER_EVAL_OK, 'success');
-    return expect(promise).resolves.toEqual({
-      result: {
-        type: 'string',
-        value: 'success',
-      },
-    });
-  });
-
-  it('calls reject for failed eval', () => {
-    const promise = controller.cmdEvaluate({
-      expression: 'invalid',
-    });
-    controller.onEvalResult(JERRY_DEBUGGER_EVAL_ERROR, 'failure');
-    return expect(promise).rejects.toEqual({
-      result: {
-        type: 'string',
-        value: 'failure',
-      },
-    });
-  });
-
-  it('calls resolve for successful eval on call frame', () => {
     const promise = controller.cmdEvaluateOnCallFrame({
       callFrameId: '0',
       expression: 'valid',
@@ -145,7 +119,7 @@ describe('onEvalResult', () => {
     });
   });
 
-  it('calls reject for failed eval on call frame', () => {
+  it('calls reject for failed eval', () => {
     const promise = controller.cmdEvaluateOnCallFrame({
       callFrameId: '0',
       expression: 'invalid',

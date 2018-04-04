@@ -103,7 +103,6 @@ export class JerryDebugProtocolHandler {
 
   private nextScriptID: number = 1;
   private exceptionData?: Uint8Array;
-  private evalQueue: Array<string> = [];
   private evalsPending: number = 0;
   private lastBreakpointHit?: Breakpoint;
   private lastBreakpointExact: boolean = true;
@@ -457,14 +456,6 @@ export class JerryDebugProtocolHandler {
     if (this.delegate.onBreakpointHit) {
       this.delegate.onBreakpointHit(breakpointRef);
     }
-
-    while (true) {
-      const expression = this.evalQueue.shift();
-      if (expression === undefined) {
-        break;
-      }
-      this.evaluate(expression);
-    }
   }
 
   onBacktrace(data: Uint8Array) {
@@ -538,8 +529,7 @@ export class JerryDebugProtocolHandler {
 
   evaluate(expression: string) {
     if (!this.lastBreakpointHit) {
-      this.evalQueue.push(expression);
-      return;
+      throw new Error('attempted eval while not at breakpoint');
     }
 
     this.evalsPending++;

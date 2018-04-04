@@ -149,13 +149,6 @@ export class CDTController {
   }
 
   // 'cmd' functions are commands from CDT to Debugger
-  cmdEvaluate(request: Crdp.Runtime.EvaluateRequest): Promise<Crdp.Runtime.EvaluateResponse> {
-    this.protocolHandler!.evaluate(request.expression);
-    return new Promise((resolve, reject) => {
-      this.evalResolvers.push({ resolve, reject });
-    });
-  }
-
   cmdEvaluateOnCallFrame(request: Crdp.Debugger.EvaluateOnCallFrameRequest): Promise<Crdp.Runtime.EvaluateResponse> {
     // FIXME: actually evaluate on call frame someday
     this.protocolHandler!.evaluate(request.expression);

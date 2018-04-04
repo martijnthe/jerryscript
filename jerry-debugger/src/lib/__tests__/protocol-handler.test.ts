@@ -383,13 +383,6 @@ describe('getScriptIdByName', () => {
 });
 
 describe('evaluate', () => {
-  it('stores expression in queue if not at breakpoint', () => {
-    const handler = new JerryDebugProtocolHandler({});
-    (handler as any).evalQueue = [];
-    handler.evaluate('foo');
-    expect((handler as any).evalQueue).toEqual(['foo']);
-  });
-
   it('sends single eval packet for short expressions', () => {
     const debugClient = {
       send: jest.fn(),
