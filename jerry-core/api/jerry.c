@@ -210,21 +210,35 @@ jerry_cleanup (void)
   }
 #endif /* JERRY_DEBUGGER */
 
+  for (jerry_context_data_header_t *this_p = JERRY_CONTEXT (context_data_p);
+       this_p != NULL;
+       this_p = this_p->next_p)
+  {
+    if (this_p->manager_p->deinit_cb)
+    {
+      this_p->manager_p->deinit_cb (JERRY_CONTEXT_DATA_HEADER_USER_DATA (this_p));
+    }
+  }
+
+#ifndef CONFIG_DISABLE_ES2015_PROMISE_BUILTIN
+  ecma_free_all_enqueued_jobs ();
+#endif /* CONFIG_DISABLE_ES2015_PROMISE_BUILTIN */
+  ecma_finalize ();
+  jerry_make_api_unavailable ();
+
   for (jerry_context_data_header_t *this_p = JERRY_CONTEXT (context_data_p), *next_p = NULL;
        this_p != NULL;
        this_p = next_p)
   {
     next_p = this_p->next_p;
-    if (this_p->manager_p->deinit_cb)
+    if (this_p->manager_p->finalize_cb)
     {
-      this_p->manager_p->deinit_cb (JERRY_CONTEXT_DATA_HEADER_USER_DATA (this_p));
+      this_p->manager_p->finalize_cb (JERRY_CONTEXT_DATA_HEADER_USER_DATA (this_p));
     }
     jmem_heap_free_block (this_p, sizeof (jerry_context_data_header_t) + this_p->manager_p->bytes_needed);
   }
 
-  ecma_finalize ();
   jmem_finalize ();
-  jerry_make_api_unavailable ();
 } /* jerry_cleanup */
 
 /**
@@ -861,6 +875,21 @@ bool jerry_is_feature_enabled (const jerry_feature_t feature)
 #ifdef JERRY_VM_EXEC_STOP
           || feature == JERRY_FEATURE_VM_EXEC_STOP
 #endif /* JERRY_VM_EXEC_STOP */
+#ifndef CONFIG_DISABLE_JSON_BUILTIN
+          || feature == JERRY_FEATURE_JSON
+#endif /* !CONFIG_DISABLE_JSON_BUILTIN */
+#ifndef CONFIG_DISABLE_ES2015_PROMISE_BUILTIN
+          || feature == JERRY_FEATURE_PROMISE
+#endif /* !CONFIG_DISABLE_ES2015_PROMISE_BUILTIN */
+#ifndef CONFIG_DISABLE_ES2015_TYPEDARRAY_BUILTIN
+          || feature == JERRY_FEATURE_TYPEDARRAY
+#endif /* !CONFIG_DISABLE_ES2015_TYPEDARRAY_BUILTIN */
+#ifndef CONFIG_DISABLE_DATE_BUILTIN
+          || feature == JERRY_FEATURE_DATE
+#endif /* !CONFIG_DISABLE_DATE_BUILTIN */
+#ifndef CONFIG_DISABLE_REGEXP_BUILTIN
+          || feature == JERRY_FEATURE_REGEXP
+#endif /* !CONFIG_DISABLE_REGEXP_BUILTIN */
           );
 } /* jerry_is_feature_enabled */
 
@@ -3393,6 +3422,63 @@ jerry_get_typedarray_buffer (jerry_value_t value, /**< TypedArray to get the arr
   return jerry_throw (ecma_raise_type_error (ECMA_ERR_MSG ("TypedArray is not supported.")));
 #endif /* !CONFIG_DISABLE_ES2015_TYPEDARRAY_BUILTIN */
 } /* jerry_get_typedarray_buffer */
+
+/**
+ * Create an object from JSON
+ *
+ * Note:
+ *      The returned value must be freed with jerry_release_value
+ * @return jerry_value_t from json formated string or an error massage
+ */
+jerry_value_t
+jerry_json_parse (const jerry_char_t *string_p, /**< json string */
+                  jerry_size_t string_size) /**< json string size */
+{
+  jerry_assert_api_available ();
+
+#ifndef CONFIG_DISABLE_JSON_BUILTIN
+  ecma_value_t ret_value = ecma_builtin_json_parse_buffer (string_p, string_size);
+
+  if (ecma_is_value_undefined (ret_value))
+  {
+    ret_value = jerry_throw (ecma_raise_syntax_error (ECMA_ERR_MSG ("JSON string parse error.")));
+  }
+
+  return ret_value;
+#else /* CONFIG_DISABLE_JSON_BUILTIN */
+  JERRY_UNUSED (string_p);
+  JERRY_UNUSED (string_size);
+
+  return jerry_throw (ecma_raise_syntax_error (ECMA_ERR_MSG ("The JSON has been disabled.")));
+#endif /* !CONFIG_DISABLE_JSON_BUILTIN */
+} /* jerry_json_parse */
+
+/**
+ * Create a Json formated string from an object
+ *
+ * Note:
+ *      The returned value must be freed with jerry_release_value
+ * @return json formated jerry_value_t or an error massage
+ */
+jerry_value_t
+jerry_json_stringfy (const jerry_value_t object_to_stringify) /**< a jerry_object_t to stringify */
+{
+  jerry_assert_api_available ();
+#ifndef CONFIG_DISABLE_JSON_BUILTIN
+  ecma_value_t ret_value = ecma_builtin_json_string_from_object (object_to_stringify);
+
+  if (ecma_is_value_undefined (ret_value))
+  {
+    ret_value = jerry_throw (ecma_raise_syntax_error (ECMA_ERR_MSG ("JSON stringify error.")));
+  }
+
+  return ret_value;
+#else /* CONFIG_DISABLE_JSON_BUILTIN */
+  JERRY_UNUSED (object_to_stringify);
+
+  return jerry_throw (ecma_raise_syntax_error (ECMA_ERR_MSG ("The JSON has been disabled.")));
+#endif /* !CONFIG_DISABLE_JSON_BUILTIN */
+} /* jerry_json_stringfy */
 
 /**
  * @}

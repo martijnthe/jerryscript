@@ -90,6 +90,11 @@ typedef enum
   JERRY_FEATURE_SNAPSHOT_EXEC, /**< executing snapshot files */
   JERRY_FEATURE_DEBUGGER, /**< debugging */
   JERRY_FEATURE_VM_EXEC_STOP, /**< stopping ECMAScript execution */
+  JERRY_FEATURE_JSON, /**< JSON support */
+  JERRY_FEATURE_PROMISE, /**< promise support */
+  JERRY_FEATURE_TYPEDARRAY, /**< Typedarray support */
+  JERRY_FEATURE_DATE, /**< Date support */
+  JERRY_FEATURE_REGEXP, /**< Regexp support */
   JERRY_FEATURE__COUNT /**< number of features. NOTE: must be at the end of the list */
 } jerry_feature_t;
 
@@ -228,9 +233,44 @@ typedef bool (*jerry_objects_foreach_by_native_info_t) (const jerry_value_t obje
  */
 typedef struct
 {
-  void (*init_cb) (void *); /**< callback responsible for initializing a context item, or NULL to zero out the memory */
-  void (*deinit_cb) (void *); /**< callback responsible for deinitializing a context item, or NULL */
-  size_t bytes_needed; /**< number of bytes to allocate for this manager */
+  /**
+   * Callback responsible for initializing a context item, or NULL to zero out the memory. This is called lazily, the
+   * first time jerry_get_context_data () is called with this manager.
+   *
+   * @param [in] data The buffer that JerryScript allocated for the manager. The buffer is zeroed out. The size is
+   * determined by the bytes_needed field. The buffer is kept alive until jerry_cleanup () is called.
+   */
+  void (*init_cb) (void *data);
+
+  /**
+   * Callback responsible for deinitializing a context item, or NULL. This is called as part of jerry_cleanup (),
+   * right *before* the VM has been cleaned up. This is a good place to release strong references to jerry_value_t's
+   * that the manager may be holding.
+   * Note: because the VM has not been fully cleaned up yet, jerry_object_native_info_t free_cb's can still get called
+   * *after* all deinit_cb's have been run. See finalize_cb for a callback that is guaranteed to run *after* all
+   * free_cb's have been run.
+   *
+   * @param [in] data The buffer that JerryScript allocated for the manager.
+   */
+  void (*deinit_cb) (void *data);
+
+  /**
+   * Callback responsible for finalizing a context item, or NULL. This is called as part of jerry_cleanup (),
+   * right *after* the VM has been cleaned up and destroyed and jerry_... APIs cannot be called any more. At this point,
+   * all values in the VM have been cleaned up. This is a good place to clean up native state that can only be cleaned
+   * up at the very end when there are no more VM values around that may need to access that state.
+   *
+   * @param [in] data The buffer that JerryScript allocated for the manager. After returning from this callback,
+   * the data pointer may no longer be used.
+   */
+  void (*finalize_cb) (void *data);
+
+  /**
+   * Number of bytes to allocate for this manager. This is the size of the buffer that JerryScript will allocate on
+   * behalf of the manager. The pointer to this buffer is passed into init_cb, deinit_cb and finalize_cb. It is also
+   * returned from the jerry_get_context_data () API.
+   */
+  size_t bytes_needed;
 } jerry_context_data_manager_t;
 
 /**
@@ -539,6 +579,8 @@ jerry_length_t jerry_get_typedarray_length (jerry_value_t value);
 jerry_value_t jerry_get_typedarray_buffer (jerry_value_t value,
                                            jerry_length_t *byte_offset,
                                            jerry_length_t *byte_length);
+jerry_value_t jerry_json_parse (const jerry_char_t *string_p, jerry_size_t string_size);
+jerry_value_t jerry_json_stringfy (const jerry_value_t object_to_stringify);
 
 /**
  * @}
