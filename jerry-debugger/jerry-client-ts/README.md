@@ -8,8 +8,8 @@
 ## Installing
 
 ```
-$ cd jerryscript/jerry-debugger
-$ yarn install 
+$ cd jerryscript/jerry-debugger/jerry-client-ts
+$ yarn install
 ```
 
 ## Using
@@ -22,30 +22,30 @@ We're aiming for a CLI that is the same as `node`'s so that any IDE that can int
 This will make the TypeScript compiler monitor the source files and re-build files whenever there is a change.
 
 ```
-$ cd jerryscript/jerry-debugger
-$ yarn build:watch 
+$ cd jerryscript/jerry-debugger/jerry-client-ts
+$ yarn build:watch
 ```
 
 ## Running tests
 
 ```
-$ cd jerryscript/jerry-debugger
-$ yarn test 
+$ cd jerryscript/jerry-debugger/jerry-client-ts
+$ yarn test
 ```
 
-## Running tests in watch mode 
+## Running tests in watch mode
 
-This will make the test runner monitor the source files and re-run the tests whenever there is a change. 
+This will make the test runner monitor the source files and re-run the tests whenever there is a change.
 
 ```
-$ cd jerryscript/jerry-debugger
+$ cd jerryscript/jerry-debugger/jerry-client-ts
 $ yarn test:watch
 ```
 
 ## Running the linter
 
 ```
-$ cd jerryscript/jerry-debugger
+$ cd jerryscript/jerry-debugger/jerry-client-ts
 $ yarn lint
 ```
 
