@@ -14,7 +14,8 @@
 
 import * as SP from './jrs-protocol-constants';
 import { Breakpoint, ParsedFunction } from './breakpoint';
-import { ByteConfig, cesu8ToString, assembleUint8Arrays, decodeMessage, encodeMessage } from './utils';
+import { ByteConfig, cesu8ToString, assembleUint8Arrays, decodeMessage, encodeMessage,
+  stringToCesu8, setUint32 } from './utils';
 import { JerryDebuggerClient } from './debugger-client';
 
 export type CompressedPointer = number;
@@ -36,9 +37,10 @@ export interface ParserStackFrame {
 }
 
 export interface JerryDebugProtocolDelegate {
-  onError?(code: number, message: string): void;
   onBacktrace?(backtrace: Array<Breakpoint>): void;
   onBreakpointHit?(message: JerryMessageBreakpointHit): void;
+  onEvalResult?(subType: number, result: string): void;
+  onError?(code: number, message: string): void;
   onResume?(): void;
   onScriptParsed?(message: JerryMessageScriptParsed): void;
 }
@@ -94,12 +96,14 @@ export class JerryDebugProtocolHandler {
   private sourceNameData?: Uint8Array;
   private functionName?: string;
   private functionNameData?: Uint8Array;
+  private evalResultData?: Uint8Array;
   private functions: FunctionMap = {};
   private newFunctions: FunctionMap = {};
   private backtrace: Array<Breakpoint> = [];
 
   private nextScriptID: number = 1;
   private exceptionData?: Uint8Array;
+  private evalsPending: number = 0;
   private lastBreakpointHit?: Breakpoint;
   private lastBreakpointExact: boolean = true;
   private activeBreakpoints: Array<Breakpoint> = [];
@@ -129,12 +133,13 @@ export class JerryDebugProtocolHandler {
       [SP.JERRY_DEBUGGER_BREAKPOINT_HIT]: this.onBreakpointHit,
       [SP.JERRY_DEBUGGER_BACKTRACE]: this.onBacktrace,
       [SP.JERRY_DEBUGGER_BACKTRACE_END]: this.onBacktrace,
+      [SP.JERRY_DEBUGGER_EVAL_RESULT]: this.onEvalResult,
+      [SP.JERRY_DEBUGGER_EVAL_RESULT_END]: this.onEvalResult,
     };
   }
 
   // FIXME: this lets test suite run for now
   unused() {
-    this.maxMessageSize,
     this.lastBreakpointExact;
   }
 
@@ -189,7 +194,7 @@ export class JerryDebugProtocolHandler {
   }
 
   onConfiguration(data: Uint8Array) {
-    console.log('[Configuration]');
+    this.logPacket('Configuration');
     if (data.length < 5) {
       this.abort('configuration message wrong size');
       return;
@@ -210,7 +215,11 @@ export class JerryDebugProtocolHandler {
   }
 
   onByteCodeCP(data: Uint8Array) {
-    console.log('[Byte Code CP]');
+    this.logPacket('Byte Code CP', true);
+    if (this.evalsPending) {
+      return;
+    }
+
     const frame = this.stack.pop();
     if (!frame) {
       throw new Error('missing parser stack frame');
@@ -251,7 +260,7 @@ export class JerryDebugProtocolHandler {
   }
 
   onParseFunction(data: Uint8Array) {
-    console.log('[Parse Function]');
+    this.logPacket('Parse Function');
     const position = this.decodeMessage('II', data, 1);
     this.stack.push({
       isFunc: true,
@@ -269,7 +278,11 @@ export class JerryDebugProtocolHandler {
   }
 
   onBreakpointList(data: Uint8Array) {
-    console.log('[Breakpoint List]');
+    this.logPacket('Breakpoint List', true);
+    if (this.evalsPending) {
+      return;
+    }
+
     if (data.byteLength % 4 !== 1 || data.byteLength < 1 + 4) {
       throw new Error('unexpected breakpoint list message length');
     }
@@ -288,7 +301,10 @@ export class JerryDebugProtocolHandler {
   }
 
   onSourceCode(data: Uint8Array) {
-    console.log('[Source Code]');
+    this.logPacket('Source Code', true);
+    if (this.evalsPending) {
+      return;
+    }
 
     if (this.stack.length === 0) {
       this.stack = [{
@@ -322,7 +338,7 @@ export class JerryDebugProtocolHandler {
   }
 
   onSourceCodeName(data: Uint8Array) {
-    console.log('[Source Code Name]');
+    this.logPacket('Source Code Name');
     this.sourceNameData = assembleUint8Arrays(this.sourceNameData, data);
     if (data[0] === SP.JERRY_DEBUGGER_SOURCE_CODE_NAME_END) {
       this.sourceName = cesu8ToString(this.sourceNameData);
@@ -333,7 +349,7 @@ export class JerryDebugProtocolHandler {
   }
 
   onFunctionName(data: Uint8Array) {
-    console.log('[Function Name]', data);
+    this.logPacket('Function Name');
     this.functionNameData = assembleUint8Arrays(this.functionNameData, data);
     if (data[0] === SP.JERRY_DEBUGGER_FUNCTION_NAME_END) {
       this.functionName = cesu8ToString(this.functionNameData);
@@ -341,8 +357,34 @@ export class JerryDebugProtocolHandler {
     }
   }
 
+  releaseFunction(byteCodeCP: number) {
+    const func = this.functions[byteCodeCP];
+
+    const lineList = this.lineLists[func.scriptId];
+    for (const i in func.lines) {
+      const array = lineList[i];
+      const index = array.indexOf(func);
+      array.splice(index, 1);
+
+      const breakpoint = func.lines[i];
+      if (breakpoint.activeIndex >= 0) {
+        delete this.activeBreakpoints[breakpoint.activeIndex];
+      }
+    }
+
+    delete this.functions[byteCodeCP];
+  }
+
   onReleaseByteCodeCP(data: Uint8Array) {
-    console.log('[Release Byte Code CP]');
+    this.logPacket('Release Byte Code CP', true);
+    if (!this.evalsPending) {
+      const byteCodeCP = this.decodeMessage('C', data, 1)[0];
+      if (byteCodeCP in this.newFunctions) {
+        delete this.newFunctions[byteCodeCP];
+      } else {
+        this.releaseFunction(byteCodeCP);
+      }
+    }
 
     // just patch up incoming message
     data[0] = SP.JERRY_DEBUGGER_FREE_BYTE_CODE_CP;
@@ -382,7 +424,11 @@ export class JerryDebugProtocolHandler {
   }
 
   onBreakpointHit(data: Uint8Array) {
-    console.log('[Breakpoint Hit]');
+    if (data[0] === SP.JERRY_DEBUGGER_BREAKPOINT_HIT) {
+      this.logPacket('Breakpoint Hit');
+    } else {
+      this.logPacket('Exception Hit');
+    }
     const breakpointData = this.decodeMessage('CI', data, 1);
     const breakpointRef = this.getBreakpoint(breakpointData);
     const breakpoint = breakpointRef.breakpoint;
@@ -412,17 +458,32 @@ export class JerryDebugProtocolHandler {
     }
   }
 
-  onBacktrace(message: Uint8Array) {
-    for (let i = 1; i < message.byteLength; i += this.byteConfig.cpointerSize + 4) {
-      const breakpointData = this.decodeMessage('CI', message, i);
+  onBacktrace(data: Uint8Array) {
+    this.logPacket('Backtrace');
+    for (let i = 1; i < data.byteLength; i += this.byteConfig.cpointerSize + 4) {
+      const breakpointData = this.decodeMessage('CI', data, i);
       this.backtrace.push(this.getBreakpoint(breakpointData).breakpoint);
     }
 
-    if (message[0] === SP.JERRY_DEBUGGER_BACKTRACE_END) {
+    if (data[0] === SP.JERRY_DEBUGGER_BACKTRACE_END) {
       if (this.delegate.onBacktrace) {
         this.delegate.onBacktrace(this.backtrace);
       }
       this.backtrace = [];
+    }
+  }
+
+  onEvalResult(data: Uint8Array) {
+    this.logPacket('Eval Result');
+    this.evalResultData = assembleUint8Arrays(this.evalResultData, data);
+    if (data[0] === SP.JERRY_DEBUGGER_EVAL_RESULT_END) {
+      const subType = data[data.length - 1];
+      const evalResult = cesu8ToString(this.evalResultData.slice(0, -1));
+      if (this.delegate.onEvalResult) {
+        this.delegate.onEvalResult(subType, evalResult);
+      }
+      this.evalResultData = undefined;
+      this.evalsPending--;
     }
   }
 
@@ -464,6 +525,29 @@ export class JerryDebugProtocolHandler {
 
   getActiveBreakpoint(breakpointId: number) {
     return this.activeBreakpoints[breakpointId];
+  }
+
+  evaluate(expression: string) {
+    if (!this.lastBreakpointHit) {
+      throw new Error('attempted eval while not at breakpoint');
+    }
+
+    this.evalsPending++;
+
+    // send an _EVAL message prefixed with the byte length, followed by _EVAL_PARTs if necessary
+    const array = stringToCesu8(expression, 1 + 4);
+    const arrayLength = array.byteLength;
+    const byteLength = arrayLength - 1 - 4;
+    array[0] = SP.JERRY_DEBUGGER_EVAL;
+    setUint32(this.byteConfig.littleEndian, array, 1, byteLength);
+
+    let offset = 0;
+    while (offset < arrayLength - 1) {
+      const clamped = Math.min(arrayLength - offset, this.maxMessageSize);
+      this.debuggerClient!.send(array.slice(offset, offset + clamped));
+      offset += clamped - 1;
+      array[offset] = SP.JERRY_DEBUGGER_EVAL_PART;
+    }
   }
 
   findBreakpoint(scriptId: number, line: number, column: number = 0) {
@@ -512,6 +596,12 @@ export class JerryDebugProtocolHandler {
       throw new Error('backtrace not allowed while app running');
     }
     this.debuggerClient!.send(encodeMessage(this.byteConfig, 'BI', [SP.JERRY_DEBUGGER_GET_BACKTRACE, 0]));
+  }
+
+  logPacket(description: string, ignorable: boolean = false) {
+    // certain packets are ignored while evals are pending
+    const ignored = (ignorable && this.evalsPending) ? 'Ignored: ' : '';
+    console.log(`[${ignored}${description}]`);
   }
 
   private abort(message: string) {

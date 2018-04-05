@@ -30,6 +30,8 @@ export interface CDTDelegate {
     Promise<Crdp.Debugger.GetPossibleBreakpointsResponse>;
   requestScriptSource: (request: Crdp.Debugger.GetScriptSourceRequest) =>
     Promise<Crdp.Debugger.GetScriptSourceResponse>;
+  cmdEvaluateOnCallFrame: (request: Crdp.Debugger.EvaluateOnCallFrameRequest) =>
+    Promise<Crdp.Debugger.EvaluateOnCallFrameResponse>;
   cmdPause: () => void;
   cmdRemoveBreakpoint: (breakpointId: number) => Promise<void>;
   cmdResume: () => void;
@@ -103,6 +105,7 @@ export class ChromeDevToolsProxyServer {
 
     this.api.Debugger.expose({
       enable: notImplemented,
+      evaluateOnCallFrame: request => this.delegate.cmdEvaluateOnCallFrame(request),
       setSkipAllPauses: async (params) => {
         this.skipAllPauses = params.skip;
       },

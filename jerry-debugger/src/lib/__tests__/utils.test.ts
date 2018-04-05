@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { getFormatSize, getUint32, setUint32, decodeMessage, encodeMessage,
-  cesu8ToString, assembleUint8Arrays } from '../utils';
+  cesu8ToString, stringToCesu8, assembleUint8Arrays } from '../utils';
 
 const defConfig = {
   cpointerSize: 2,
@@ -263,9 +263,14 @@ describe('encodeMessage', () => {
   });
 });
 
-describe('cesu8ToString', () => {
+describe('cesu8ToString and stringToCesu8', () => {
   it('returns empty string for undefined input', () => {
     expect(cesu8ToString(undefined)).toEqual('');
+  });
+
+  it('returns empty array for empty string, and vice versa', () => {
+    expect(cesu8ToString(new Uint8Array(0))).toEqual('');
+    expect(stringToCesu8('')).toEqual(new Uint8Array(0));
   });
 
   it('returns ASCII from ASCII', () => {
@@ -275,6 +280,7 @@ describe('cesu8ToString', () => {
       array[i] = sentence.charCodeAt(i);
     }
     expect(cesu8ToString(array)).toEqual(sentence);
+    expect(stringToCesu8(sentence)).toEqual(array);
   });
 
   it('acts like UTF-8 for two-byte encodings', () => {
@@ -284,6 +290,8 @@ describe('cesu8ToString', () => {
     const highTwoByte = Uint8Array.from([0xc0 + 0x1f, 0x80 + 0x3f]);
     expect(cesu8ToString(lowTwoByte)).toEqual(String.fromCharCode(0x80));
     expect(cesu8ToString(highTwoByte)).toEqual(String.fromCharCode(0x7ff));
+    expect(stringToCesu8(String.fromCharCode(0x80))).toEqual(lowTwoByte);
+    expect(stringToCesu8(String.fromCharCode(0x7ff))).toEqual(highTwoByte);
   });
 
   it('acts like UTF-8 for three-byte encodings', () => {
@@ -293,6 +301,8 @@ describe('cesu8ToString', () => {
     const highThreeByte = Uint8Array.from([0xe0 + 0x0f, 0x80 + 0x3f, 0x80 + 0x3f]);
     expect(cesu8ToString(lowThreeByte)).toEqual(String.fromCharCode(0x0800));
     expect(cesu8ToString(highThreeByte)).toEqual(String.fromCharCode(0xffff));
+    expect(stringToCesu8(String.fromCharCode(0x0800))).toEqual(lowThreeByte);
+    expect(stringToCesu8(String.fromCharCode(0xffff))).toEqual(highThreeByte);
   });
 
   it('decodes UTF-16 surrogate pairs', () => {
@@ -305,6 +315,7 @@ describe('cesu8ToString', () => {
       0xe0 + 0x0d, 0x80 + 0x38, 0x80 + 0x02,
     ]);
     expect(cesu8ToString(surrogatePairBytes)).toEqual('😂');
+    expect(stringToCesu8('😂')).toEqual(surrogatePairBytes);
   });
 });
 
