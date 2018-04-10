@@ -18,7 +18,7 @@ import WebSocket from 'ws';
 jest.mock('ws');
 
 describe('JerryDebugger constructor', () => {
-  it ('uses supplied option values', () => {
+  it('uses supplied option values', () => {
     const delegate = {} as any;
     const jd = new JerryDebuggerClient({
       delegate,
@@ -39,9 +39,6 @@ describe('JerryDebugger constructor', () => {
 });
 
 describe('JerryDebugger.connect', () => {
-  beforeEach(() => {
-  });
-
   it('creates a websocket', () => {
     const delegate = {} as any;
     const jd = new JerryDebuggerClient({ delegate });
