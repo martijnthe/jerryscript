@@ -42,7 +42,7 @@ describe('JerryDebugger.connect', () => {
   it('creates a websocket', () => {
     const delegate = {} as any;
     const jd = new JerryDebuggerClient({ delegate });
-    jd.connect();
+    jd.connect().catch((e) => { throw e; });
     expect(WebSocket).toHaveBeenCalledTimes(1);
   });
 });
